@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -10,16 +11,18 @@ const String kBankAccount = 'bank';
 const String kIncomeType = 'income';
 const String kExpenseType = 'expense';
 
-const Color kPrimaryBlue = Color(0xFF0A84FF);
-const Color kPrimaryBlueDeep = Color(0xFF1D4ED8);
-const Color kSurface = Color(0xFFF4F7FB);
+const Color kPrimaryBlue = Color(0xFFFF9500);
+const Color kPrimaryBlueDeep = Color(0xFFE07A00);
+const Color kSurface = Color(0xFFFFFCF8);
 const Color kTextPrimary = Color(0xFF111827);
 const Color kTextSecondary = Color(0xFF6B7280);
-const Color kBorder = Color(0xFFE5E7EB);
-const Color kCashTint = Color(0xFF5AC8FA);
-const Color kBankTint = Color(0xFF3B82F6);
+const Color kBorder = Colors.transparent;
+const Color kCashTint = Color(0xFF9CA3AF);
+const Color kBankTint = Color(0xFF6B7280);
 const Color kIncomeTint = Color(0xFF34C759);
 const Color kExpenseTint = Color(0xFFFF9500);
+
+enum FilterMode { daily, weekly, monthly, annually }
 
 Future<void> initializeApp() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,10 +42,11 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Smart Offline Expense Manager',
+      scrollBehavior: const _NoScrollbarBehavior(),
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: kPrimaryBlue),
-        scaffoldBackgroundColor: Colors.white,
+        scaffoldBackgroundColor: const Color(0xFFFFFCF8),
         textTheme: const TextTheme(
           headlineMedium: TextStyle(fontWeight: FontWeight.w800),
           titleLarge: TextStyle(fontWeight: FontWeight.w800),
@@ -60,6 +64,16 @@ class ExpenseDashboardPage extends StatefulWidget {
 
   @override
   State<ExpenseDashboardPage> createState() => _ExpenseDashboardPageState();
+}
+
+class _NoScrollbarBehavior extends MaterialScrollBehavior {
+  const _NoScrollbarBehavior();
+
+  @override
+  Widget buildScrollbar(
+      BuildContext context, Widget child, ScrollableDetails details) {
+    return child;
+  }
 }
 
 class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
@@ -99,21 +113,21 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
     String accountType = kCashAccount;
     String transactionType = kExpenseType;
 
-    final shouldSave = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return _AddTransactionSheet(
-          amountController: amountController,
-          categoryController: categoryController,
-          noteController: noteController,
-          accountType: accountType,
-          transactionType: transactionType,
-          onAccountTypeChanged: (value) => accountType = value,
-          onTransactionTypeChanged: (value) => transactionType = value,
-        );
-      },
+    final shouldSave = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) {
+          return _AddTransactionPage(
+            amountController: amountController,
+            categoryController: categoryController,
+            noteController: noteController,
+            accountType: accountType,
+            transactionType: transactionType,
+            onAccountTypeChanged: (value) => accountType = value,
+            onTransactionTypeChanged: (value) => transactionType = value,
+          );
+        },
+      ),
     );
 
     final amount = double.tryParse(amountController.text.trim());
@@ -238,16 +252,9 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
     return Scaffold(
       extendBody: true,
       body: IndexedStack(index: _selectedTab, children: pages),
-      floatingActionButton: _selectedTab == 0
-          ? FloatingActionButton.extended(
-              onPressed: _openAddTransactionSheet,
-              icon: const Icon(Icons.add),
-              label: const Text('Add'),
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       bottomNavigationBar: _BottomNavBar(
         selectedIndex: _selectedTab,
+        onAdd: _openAddTransactionSheet,
         onTap: (index) {
           setState(() {
             _selectedTab = index;
@@ -258,7 +265,7 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
   }
 }
 
-class _HomeTab extends StatelessWidget {
+class _HomeTab extends StatefulWidget {
   const _HomeTab({
     required this.loading,
     required this.expenses,
@@ -278,57 +285,128 @@ class _HomeTab extends StatelessWidget {
   final Future<void> Function(Expense expense) onDelete;
 
   @override
+  State<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<_HomeTab> {
+  FilterMode _mode = FilterMode.daily;
+
+  List<Expense> get _filteredExpenses {
+    final now = DateTime.now();
+    switch (_mode) {
+      case FilterMode.daily:
+        return widget.expenses.where((e) {
+          return e.date.year == now.year &&
+              e.date.month == now.month &&
+              e.date.day == now.day;
+        }).toList();
+      case FilterMode.weekly:
+        final startOfWeek = DateTime(now.year, now.month, now.day)
+            .subtract(Duration(days: now.weekday - 1));
+        return widget.expenses.where((e) {
+          return e.date
+                  .isAfter(startOfWeek.subtract(const Duration(seconds: 1))) &&
+              e.date.isBefore(now.add(const Duration(days: 1)));
+        }).toList();
+      case FilterMode.monthly:
+        return widget.expenses.where((e) {
+          return e.date.year == now.year && e.date.month == now.month;
+        }).toList();
+      case FilterMode.annually:
+        return widget.expenses.where((e) => e.date.year == now.year).toList();
+    }
+  }
+
+  double _sumIncome(List<Expense> list) => list
+      .where((expense) => expense.isIncome)
+      .fold<double>(0, (sum, expense) => sum + expense.amount);
+
+  double _sumExpense(List<Expense> list) => list
+      .where((expense) => expense.isExpense)
+      .fold<double>(0, (sum, expense) => sum + expense.amount);
+
+  String _modeLabel() {
+    switch (_mode) {
+      case FilterMode.daily:
+        return 'Daily';
+      case FilterMode.weekly:
+        return 'Weekly';
+      case FilterMode.monthly:
+        return 'Monthly';
+      case FilterMode.annually:
+        return 'Annual';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return _TabShell(
-      title: 'Home',
-      subtitle: 'Track income and expenses from one clean dashboard.',
-      child: RefreshIndicator(
-        onRefresh: onRefresh,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 120),
-          children: [
-            _HomeHeroCard(
-              incomeTotal: incomeTotal,
-              expenseTotal: expenseTotal,
-              netTotal: netTotal,
-            ),
-            const SizedBox(height: 16),
-            _SummaryStrip(
-              leftLabel: 'Income',
-              leftValue: _money(incomeTotal),
-              middleLabel: 'Expenses',
-              middleValue: _money(expenseTotal),
-              rightLabel: 'Net',
-              rightValue: _money(netTotal),
-            ),
-            const SizedBox(height: 18),
-            _SectionHeader(
-                title: 'Recent activity', action: '${expenses.length} records'),
-            const SizedBox(height: 10),
-            if (loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 48),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (expenses.isEmpty)
-              const _EmptyState(
-                icon: Icons.receipt_long_outlined,
-                title: 'No transactions yet',
-                subtitle:
-                    'Tap the + button to add your first income or expense.',
-              )
-            else
-              ...expenses.map(
-                (expense) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _TransactionCard(
-                    expense: expense,
-                    onDelete: () => onDelete(expense),
-                  ),
-                ),
+    final expenses = _filteredExpenses;
+    final incomeTotal = _sumIncome(expenses);
+    final expenseTotal = _sumExpense(expenses);
+    final netTotal = incomeTotal - expenseTotal;
+
+    return Container(
+      color: Colors.white,
+      child: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: widget.onRefresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 120),
+            children: [
+              _TransactionsTopBar(monthLabel: _monthYearLabel(DateTime.now())),
+              const SizedBox(height: 10),
+              _TransactionsModeBar(
+                  mode: _mode, onChanged: (m) => setState(() => _mode = m)),
+              const SizedBox(height: 10),
+              _SummaryStrip(
+                leftLabel: 'Income',
+                leftValue: _money(incomeTotal),
+                middleLabel: 'Expenses',
+                middleValue: _money(expenseTotal),
+                rightLabel: 'Total',
+                rightValue: _money(netTotal),
               ),
-          ],
+              const SizedBox(height: 12),
+              _SectionHeader(
+                title: _modeLabel(),
+                action: '${expenses.length} transactions',
+              ),
+              const SizedBox(height: 8),
+              if (widget.loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 48),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (expenses.isEmpty)
+                const _EmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'No transactions yet',
+                  subtitle:
+                      'Tap the + button to add your first income or expense.',
+                )
+              else
+                ..._groupExpensesByDate(expenses).entries.expand(
+                      (entry) => [
+                        _DayTransactionGroupHeader(
+                          date: entry.key,
+                          expenses: entry.value,
+                        ),
+                        const SizedBox(height: 8),
+                        ...entry.value.map(
+                          (expense) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _TransactionCard(
+                              expense: expense,
+                              onDelete: () => widget.onDelete(expense),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                    ),
+            ],
+          ),
         ),
       ),
     );
@@ -547,9 +625,8 @@ class _TabShell extends StatelessWidget {
                     height: 44,
                     width: 44,
                     decoration: BoxDecoration(
-                      color: kSurface,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: kBorder),
                     ),
                     child: const Icon(Icons.account_balance_wallet_rounded,
                         color: kTextPrimary),
@@ -601,7 +678,7 @@ class _HomeHeroCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         gradient: const LinearGradient(
-          colors: [Color(0xFF0A84FF), Color(0xFF64D2FF)],
+          colors: [Color(0xFFFF9500), Color(0xFFFFB347)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -694,24 +771,142 @@ class _SummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _SummaryChip(
+              label: leftLabel,
+              value: leftValue,
+              color: const Color(0xFF10B981),
+            ),
+          ),
+          Expanded(
+            child: _SummaryChip(
+              label: middleLabel,
+              value: middleValue,
+              color: const Color(0xFFEF4444),
+            ),
+          ),
+          Expanded(
+            child: _SummaryChip(
+              label: rightLabel,
+              value: rightValue,
+              color: kPrimaryBlueDeep,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TransactionsTopBar extends StatelessWidget {
+  const _TransactionsTopBar({required this.monthLabel});
+
+  final String monthLabel;
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       children: [
+        const Icon(Icons.chevron_left_rounded, color: kTextPrimary),
+        const SizedBox(width: 4),
         Expanded(
-            child: _SummaryChip(
-                label: leftLabel,
-                value: leftValue,
-                color: const Color(0xFF10B981))),
+          child: Text(
+            monthLabel,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ),
+        const Icon(Icons.star_border_rounded, color: kTextPrimary),
         const SizedBox(width: 12),
-        Expanded(
-            child: _SummaryChip(
-                label: middleLabel,
-                value: middleValue,
-                color: const Color(0xFFEF4444))),
+        const Icon(Icons.search_rounded, color: kTextPrimary),
         const SizedBox(width: 12),
-        Expanded(
-            child: _SummaryChip(
-                label: rightLabel, value: rightValue, color: kPrimaryBlueDeep)),
+        const Icon(Icons.tune_rounded, color: kTextPrimary),
       ],
+    );
+  }
+}
+
+class _TransactionsModeBar extends StatelessWidget {
+  const _TransactionsModeBar({required this.mode, required this.onChanged});
+
+  final FilterMode mode;
+  final ValueChanged<FilterMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _ModeTab(
+            label: 'Daily',
+            active: mode == FilterMode.daily,
+            onTap: () => onChanged(FilterMode.daily)),
+        const SizedBox(width: 16),
+        _ModeTab(
+            label: 'Weekly',
+            active: mode == FilterMode.weekly,
+            onTap: () => onChanged(FilterMode.weekly)),
+        const SizedBox(width: 16),
+        _ModeTab(
+            label: 'Monthly',
+            active: mode == FilterMode.monthly,
+            onTap: () => onChanged(FilterMode.monthly)),
+        const SizedBox(width: 16),
+        _ModeTab(
+            label: 'Annual',
+            active: mode == FilterMode.annually,
+            onTap: () => onChanged(FilterMode.annually)),
+      ],
+    );
+  }
+}
+
+class _ModeTab extends StatelessWidget {
+  const _ModeTab({required this.label, this.active = false, this.onTap});
+
+  final String label;
+  final bool active;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color:
+                        active ? kPrimaryBlue : kTextPrimary.withOpacity(0.7),
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  ),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              height: 3,
+              width: 28,
+              decoration: BoxDecoration(
+                color: active ? kPrimaryBlue : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -729,11 +924,11 @@ class _SummaryChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: kSurface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: kPrimaryBlue.withOpacity(0.08),
               blurRadius: 18,
               offset: const Offset(0, 10)),
         ],
@@ -791,11 +986,11 @@ class _MiniMetric extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kSurface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: kPrimaryBlue.withOpacity(0.08),
               blurRadius: 18,
               offset: const Offset(0, 10)),
         ],
@@ -856,11 +1051,11 @@ class _PieCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: kSurface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: kPrimaryBlue.withOpacity(0.08),
               blurRadius: 18,
               offset: const Offset(0, 10)),
         ],
@@ -919,9 +1114,8 @@ class _LegendPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: kSurface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1000,59 +1194,210 @@ class _TransactionCard extends StatelessWidget {
     final color = expense.isIncome ? kIncomeTint : kExpenseTint;
     final accountColor =
         expense.accountType == kCashAccount ? kCashTint : kBankTint;
+    Color amountColor = expense.isIncome ? kIncomeTint : kExpenseTint;
+    String formattedAmount = _formatCurrency(expense.currency, expense.amount);
 
     return Container(
       decoration: BoxDecoration(
-        color: kSurface,
-        borderRadius: BorderRadius.circular(22),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 18,
-              offset: const Offset(0, 10)),
+            color: kPrimaryBlue.withOpacity(0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
         ],
       ),
-      child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        leading: Container(
-          height: 52,
-          width: 52,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Icon(
-              expense.isIncome
-                  ? Icons.arrow_downward_rounded
-                  : Icons.arrow_upward_rounded,
-              color: color),
-        ),
-        title: Row(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
           children: [
-            Expanded(
-              child: Text(
-                '${expense.isIncome ? '+' : '-'}${_money(expense.amount)}',
-                style: const TextStyle(fontWeight: FontWeight.w800),
+            SizedBox(
+              width: 36,
+              child: Icon(
+                Icons.attach_money,
+                color: amountColor.withOpacity(0.9),
+                size: 20,
               ),
             ),
-            _Badge(label: expense.accountType, color: accountColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    expense.category,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: kTextSecondary, fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    expense.notes?.isNotEmpty == true
+                        ? expense.notes!
+                        : expense.transactionType,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    expense.accountType,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: kTextSecondary, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      formattedAmount,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: amountColor,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: accountColor.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        expense.accountType,
+                        style: TextStyle(
+                          color: accountColor,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ],
         ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            '${expense.category} • ${expense.transactionType} • ${expense.notes?.isNotEmpty == true ? expense.notes : 'No note'} • ${_formatDate(expense.date)}',
-            style: const TextStyle(height: 1.25),
+      ),
+    );
+  }
+}
+
+class _DayTransactionGroupHeader extends StatelessWidget {
+  const _DayTransactionGroupHeader({
+    required this.date,
+    required this.expenses,
+  });
+
+  final DateTime date;
+  final List<Expense> expenses;
+
+  @override
+  Widget build(BuildContext context) {
+    final income = expenses
+        .where((expense) => expense.isIncome)
+        .fold<double>(0, (sum, item) => sum + item.amount);
+    final expense = expenses
+        .where((item) => item.isExpense)
+        .fold<double>(0, (sum, item) => sum + item.amount);
+    final net = income - expense;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Container(
+            height: 46,
+            width: 46,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '${date.day}',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Text(
+                  _weekdayLabel(date.weekday),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: kTextPrimary.withOpacity(0.7),
+                        fontSize: 10,
+                      ),
+                ),
+              ],
+            ),
           ),
-        ),
-        trailing: onDelete == null
-            ? null
-            : IconButton(
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline_rounded),
-                tooltip: 'Delete',
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _monthYearLabel(date),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${expenses.length} transactions',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _money(income),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: kIncomeTint,
+                ),
               ),
+              Text(
+                _money(expense),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: kExpenseTint,
+                ),
+              ),
+              Text(
+                'Net ${_money(net)}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: kPrimaryBlueDeep,
+                    ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1096,13 +1441,14 @@ class _AccountBalanceCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: kSurface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 18,
-              offset: const Offset(0, 10)),
+            color: kPrimaryBlue.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
         ],
       ),
       child: Row(
@@ -1147,11 +1493,11 @@ class _SettingTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: kSurface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: kPrimaryBlue.withOpacity(0.08),
               blurRadius: 18,
               offset: const Offset(0, 10)),
         ],
@@ -1180,7 +1526,7 @@ class _EmptyState extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: kSurface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
@@ -1222,7 +1568,7 @@ class _SectionHeader extends StatelessWidget {
             style: Theme.of(context)
                 .textTheme
                 .bodySmall
-                ?.copyWith(color: Colors.black54),
+                ?.copyWith(color: kTextPrimary.withOpacity(0.7)),
           ),
       ],
     );
@@ -1230,55 +1576,84 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _BottomNavBar extends StatelessWidget {
-  const _BottomNavBar({required this.selectedIndex, required this.onTap});
+  const _BottomNavBar({
+    required this.selectedIndex,
+    required this.onTap,
+    required this.onAdd,
+  });
 
   final int selectedIndex;
   final ValueChanged<int> onTap;
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: kSurface,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12)),
-            ],
-          ),
-          child: Row(
-            children: [
-              _NavItem(
-                icon: Icons.home_rounded,
-                label: 'Home',
-                active: selectedIndex == 0,
-                onTap: () => onTap(0),
-              ),
-              _NavItem(
-                icon: Icons.pie_chart_rounded,
-                label: 'Stats',
-                active: selectedIndex == 1,
-                onTap: () => onTap(1),
-              ),
-              _NavItem(
-                icon: Icons.account_balance_wallet_rounded,
-                label: 'Accounts',
-                active: selectedIndex == 2,
-                onTap: () => onTap(2),
-              ),
-              _NavItem(
-                icon: Icons.settings_rounded,
-                label: 'Settings',
-                active: selectedIndex == 3,
-                onTap: () => onTap(3),
-              ),
-            ],
+      top: false,
+      child: Container(
+        height: 72,
+        decoration: BoxDecoration(
+          color: Colors.white,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _NavItem(
+              icon: Icons.receipt_long_rounded,
+              label: 'Transactions',
+              active: selectedIndex == 0,
+              onTap: () => onTap(0),
+            ),
+            _NavItem(
+              icon: Icons.pie_chart_rounded,
+              label: 'Stats',
+              active: selectedIndex == 1,
+              onTap: () => onTap(1),
+            ),
+            _AddNavItem(onTap: onAdd),
+            _NavItem(
+              icon: Icons.account_balance_wallet_rounded,
+              label: 'Accounts',
+              active: selectedIndex == 2,
+              onTap: () => onTap(2),
+            ),
+            _NavItem(
+              icon: Icons.settings_rounded,
+              label: 'Settings',
+              active: selectedIndex == 3,
+              onTap: () => onTap(3),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddNavItem extends StatelessWidget {
+  const _AddNavItem({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Center(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            height: 42,
+            width: 42,
+            decoration: const BoxDecoration(
+              color: kPrimaryBlue,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.add_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
           ),
         ),
       ),
@@ -1326,8 +1701,8 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-class _AddTransactionSheet extends StatefulWidget {
-  const _AddTransactionSheet({
+class _AddTransactionPage extends StatefulWidget {
+  const _AddTransactionPage({
     required this.amountController,
     required this.categoryController,
     required this.noteController,
@@ -1346,10 +1721,10 @@ class _AddTransactionSheet extends StatefulWidget {
   final ValueChanged<String> onTransactionTypeChanged;
 
   @override
-  State<_AddTransactionSheet> createState() => _AddTransactionSheetState();
+  State<_AddTransactionPage> createState() => _AddTransactionPageState();
 }
 
-class _AddTransactionSheetState extends State<_AddTransactionSheet> {
+class _AddTransactionPageState extends State<_AddTransactionPage> {
   late String _accountType;
   late String _transactionType;
 
@@ -1370,130 +1745,137 @@ class _AddTransactionSheetState extends State<_AddTransactionSheet> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFFCF8),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          icon: const Icon(Icons.close_rounded),
         ),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 5,
-                    decoration: BoxDecoration(
-                        color: Colors.black12,
-                        borderRadius: BorderRadius.circular(999)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text('Add transaction',
-                          style: Theme.of(context).textTheme.titleLarge),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: widget.amountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Amount',
-                    prefixIcon: Icon(Icons.attach_money_rounded),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: widget.categoryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    prefixIcon: Icon(Icons.category_rounded),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text('Account type',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                        value: kCashAccount,
-                        label: Text('Cash'),
-                        icon: Icon(Icons.payments_outlined)),
-                    ButtonSegment(
-                        value: kBankAccount,
-                        label: Text('Bank'),
-                        icon: Icon(Icons.account_balance_outlined)),
-                  ],
-                  selected: {_accountType},
-                  onSelectionChanged: (value) {
-                    setState(() {
-                      _accountType = value.first;
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                Text('Transaction type',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                        value: kExpenseType,
-                        label: Text('Expense'),
-                        icon: Icon(Icons.remove_circle_outline)),
-                    ButtonSegment(
-                        value: kIncomeType,
-                        label: Text('Income'),
-                        icon: Icon(Icons.add_circle_outline)),
-                  ],
-                  selected: {_transactionType},
-                  onSelectionChanged: (value) {
-                    setState(() {
-                      _transactionType = value.first;
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: widget.noteController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Note (optional)',
-                    alignLabelWithHint: true,
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _save,
-                    icon: const Icon(Icons.check_rounded),
-                    label: const Text('Save'),
-                  ),
-                ),
-              ],
-            ),
+        title: const Text('Add transaction'),
+        actions: [
+          TextButton(
+            onPressed: _save,
+            child: const Text('Save'),
           ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 24 + bottomInset),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _AddFieldSection(
+              title: 'Amount',
+              child: TextField(
+                controller: widget.amountController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  hintText: 'Enter amount',
+                  prefixIcon: Icon(Icons.attach_money_rounded),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _AddFieldSection(
+              title: 'Category',
+              child: TextField(
+                controller: widget.categoryController,
+                decoration: const InputDecoration(
+                  hintText: 'General',
+                  prefixIcon: Icon(Icons.category_rounded),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _AddFieldSection(
+              title: 'Account type',
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                      value: kCashAccount,
+                      label: Text('Cash'),
+                      icon: Icon(Icons.payments_outlined)),
+                  ButtonSegment(
+                      value: kBankAccount,
+                      label: Text('Bank'),
+                      icon: Icon(Icons.account_balance_outlined)),
+                ],
+                selected: {_accountType},
+                onSelectionChanged: (value) {
+                  setState(() {
+                    _accountType = value.first;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 14),
+            _AddFieldSection(
+              title: 'Transaction type',
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                      value: kExpenseType,
+                      label: Text('Expense'),
+                      icon: Icon(Icons.remove_circle_outline)),
+                  ButtonSegment(
+                      value: kIncomeType,
+                      label: Text('Income'),
+                      icon: Icon(Icons.add_circle_outline)),
+                ],
+                selected: {_transactionType},
+                onSelectionChanged: (value) {
+                  setState(() {
+                    _transactionType = value.first;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 14),
+            _AddFieldSection(
+              title: 'Note',
+              child: TextField(
+                controller: widget.noteController,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  hintText: 'Optional note',
+                  alignLabelWithHint: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _AddFieldSection extends StatelessWidget {
+  const _AddFieldSection({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
     );
   }
 }
@@ -1506,18 +1888,72 @@ String _formatDate(DateTime date) {
   return '$day/$month/${date.year}';
 }
 
+String _monthYearLabel(DateTime date) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${months[date.month - 1]} ${date.year}';
+}
+
+String _weekdayLabel(int weekday) {
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return labels[weekday - 1];
+}
+
+LinkedHashMap<DateTime, List<Expense>> _groupExpensesByDate(
+  List<Expense> expenses,
+) {
+  final groups = LinkedHashMap<DateTime, List<Expense>>();
+
+  for (final expense in expenses) {
+    final date =
+        DateTime(expense.date.year, expense.date.month, expense.date.day);
+    groups.putIfAbsent(date, () => <Expense>[]).add(expense);
+  }
+
+  return groups;
+}
+
 Color _chartColor(int index) {
   const colors = [
-    Color(0xFF0A84FF),
-    Color(0xFF06B6D4),
+    Color(0xFFFF9500),
+    Color(0xFF9CA3AF),
     Color(0xFF16A34A),
-    Color(0xFFF59E0B),
+    Color(0xFFF97316),
     Color(0xFFEF4444),
-    Color(0xFF64748B),
+    Color(0xFF6B7280),
     Color(0xFFEC4899),
     Color(0xFF14B8A6),
   ];
   return colors[index % colors.length];
+}
+
+String _formatCurrency(String currency, double value) {
+  // Simple formatter: support INR 'INR' or 'Rs' -> 'Rs. 1,500.00', otherwise fallback to dollar style
+  String s = value.toStringAsFixed(2);
+  final parts = s.split('.');
+  final integer = parts[0];
+  final fraction = parts.length > 1 ? parts[1] : '00';
+  final reg = RegExp(r'\B(?=(\d{3})+(?!\d))');
+  final withCommas = integer.replaceAllMapped(reg, (m) => ',${m.group(0)}');
+  if (currency.toLowerCase() == 'inr' ||
+      currency.toLowerCase() == 'rs' ||
+      currency.toLowerCase() == 'rs.') {
+    return 'Rs. $withCommas.$fraction';
+  }
+  // default
+  return '\$${withCommas}.$fraction';
 }
 
 extension _IterableIndexExtension<T> on Iterable<T> {

@@ -7,7 +7,7 @@ void main() {
     await tester.pumpWidget(const app.MyApp());
     await tester.pumpAndSettle();
     expect(find.byType(app.ExpenseDashboardPage), findsOneWidget);
-    expect(find.byType(FloatingActionButton), findsOneWidget);
-    expect(find.text('Home'), findsWidgets);
+    expect(find.byIcon(Icons.add_rounded), findsWidgets);
+    expect(find.text('Transactions'), findsWidgets);
   });
 }
