@@ -1,0 +1,27 @@
+name: expence_apk
+description: Smart Offline Expense Manager (scaffold)
+publish_to: 'none'
+version: 0.0.1
+environment:
+  sdk: '>=2.17.0 <3.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.0.0+4
+  path_provider: ^2.0.0
+  path: ^1.8.0
+  provider: ^6.0.0
+  google_ml_kit: ^0.8.0
+  flutter_localizations:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  sqflite_common_ffi: ^2.2.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
