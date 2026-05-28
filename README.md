@@ -1,12 +1,10 @@
 # Smart Offline Expense Manager
 
-Minimal scaffold for the Smart Offline Expense Manager (Flutter).
-
-This repo contains initial project scaffolding: basic Flutter files, data model stubs, and service stubs for DB, OCR, and backup.
+Flutter app for offline-first expense tracking, with income/expense entry, account balances, and stats views.
 
 Quick start
 
-1. Install Flutter SDK: https://flutter.dev/docs/get-started/install
+1. Install the Flutter SDK: https://flutter.dev/docs/get-started/install
 2. From this folder run:
 
 ```bash
@@ -16,5 +14,5 @@ flutter run
 
 Notes
 
-- Run `flutter create .` if you want Flutter to generate platform folders (`android/`, `ios/`).
-- This scaffold is minimal — implement DB, OCR, and UI next.
+- Use `flutter run -d chrome` to launch the web version.
+- The app includes a web-safe fallback for local development.
