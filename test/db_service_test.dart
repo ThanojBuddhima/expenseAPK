@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:expence_apk/models/account.dart';
 import 'package:expence_apk/models/expense.dart';
 import 'package:expence_apk/services/db_service.dart';
 
@@ -60,5 +61,38 @@ void main() {
     expect(items, hasLength(1));
     expect(items.first.isIncome, isTrue);
     expect(items.first.accountType, 'bank');
+  });
+
+  test('inserts and reads custom accounts', () async {
+    final account = Account(
+      name: 'Savings',
+      balance: 250.0,
+      colorValue: 0xFF06B6D4,
+    );
+
+    final id = await db.insertAccount(account);
+    final accounts = await db.getAllAccounts();
+
+    expect(id, greaterThan(0));
+    expect(accounts, hasLength(1));
+    expect(accounts.first.name, 'Savings');
+    expect(accounts.first.balance, 250.0);
+    expect(accounts.first.colorValue, 0xFF06B6D4);
+  });
+
+  test('deletes custom accounts', () async {
+    final id = await db.insertAccount(
+      Account(
+        name: 'Wallet',
+        balance: 40.0,
+        colorValue: 0xFFF59E0B,
+      ),
+    );
+
+    final deleted = await db.deleteAccount(id);
+    final accounts = await db.getAllAccounts();
+
+    expect(deleted, 1);
+    expect(accounts, isEmpty);
   });
 }
