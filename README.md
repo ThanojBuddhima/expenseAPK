@@ -7,7 +7,7 @@ Quick start
 1. Install the Flutter SDK: https://flutter.dev/docs/get-started/install
 2. From this folder run:
 
-```bash
+```bas
 flutter pub get
 flutter run
 ```

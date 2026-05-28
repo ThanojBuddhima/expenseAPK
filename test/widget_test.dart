@@ -8,6 +8,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(app.ExpenseDashboardPage), findsOneWidget);
     expect(find.byIcon(Icons.add_rounded), findsWidgets);
+    expect(find.byIcon(Icons.filter_alt_rounded), findsWidgets);
     expect(find.text('Transactions'), findsWidgets);
   });
 }
