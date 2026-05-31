@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import '../services/app_preferences.dart';
 import '../services/auth_service.dart';
+import '../services/currency_service.dart';
+import '../services/db_service.dart';
 import 'auth_lock_screen.dart';
+import 'onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({
@@ -26,6 +30,31 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _bootstrap() async {
     await Future<void>.delayed(const Duration(milliseconds: 1200));
     if (!mounted) {
+      return;
+    }
+
+    await CurrencyService.load();
+
+    var showOnboarding = await AppPreferences.instance.shouldShowOnboarding();
+    if (showOnboarding) {
+      final expenses = await DBService.instance.getAllExpenses();
+      final accounts = await DBService.instance.getAllAccounts();
+      if (expenses.isNotEmpty || accounts.isNotEmpty) {
+        await AppPreferences.instance.setOnboardingComplete(true);
+        showOnboarding = false;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (showOnboarding) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => OnboardingScreen(buildDashboard: widget.buildDashboard),
+        ),
+      );
       return;
     }
 

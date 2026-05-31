@@ -11,6 +11,8 @@ class AppPreferences {
   static const _biometricEnabledKey = 'biometric_enabled';
   static const _darkModeKey = 'dark_mode';
   static const _pinSetupCompleteKey = 'pin_setup_complete';
+  static const _onboardingCompleteKey = 'onboarding_complete';
+  static const _defaultCurrencyKey = 'default_currency';
 
   SharedPreferences? _prefs;
   final Map<String, Object> _memory = <String, Object>{};
@@ -80,6 +82,39 @@ class AppPreferences {
       return;
     }
     await _prefs!.remove(key);
+  }
+
+  Future<bool> get onboardingComplete async {
+    await init();
+    return _getBool(_onboardingCompleteKey);
+  }
+
+  Future<String> get defaultCurrency async {
+    await init();
+    return _getString(_defaultCurrencyKey) ?? 'USD';
+  }
+
+  Future<void> setOnboardingComplete(bool complete) async {
+    await init();
+    await _setBool(_onboardingCompleteKey, complete);
+  }
+
+  Future<void> setDefaultCurrency(String code) async {
+    await init();
+    await _setString(_defaultCurrencyKey, code);
+  }
+
+  /// Skip onboarding for installs that already have user data.
+  Future<bool> shouldShowOnboarding() async {
+    await init();
+    if (_getBool(_onboardingCompleteKey)) {
+      return false;
+    }
+    if (_getBool(_pinSetupCompleteKey)) {
+      await setOnboardingComplete(true);
+      return false;
+    }
+    return true;
   }
 
   Future<bool> get pinEnabled async {

@@ -16,6 +16,7 @@ import 'screens/calculator_tab.dart';
 import 'screens/settings_tab.dart';
 import 'screens/splash_screen.dart';
 import 'services/app_preferences.dart';
+import 'services/currency_service.dart';
 import 'services/db_service.dart';
 import 'widgets/bottom_add_button.dart';
 import 'widgets/frosted_bar.dart';
@@ -61,6 +62,7 @@ Future<void> initializeApp() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppPreferences.instance.init();
   await DBService.instance.init();
+  await CurrencyService.load();
   runApp(const ExpenseApp());
 }
 
@@ -150,6 +152,7 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
   }
 
   Future<void> _reloadDashboard() async {
+    await CurrencyService.load();
     setState(() {
       _loading = true;
     });
@@ -226,15 +229,9 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
   Future<void> _openAccountsPage() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (context) => Scaffold(
-          appBar: AppBar(title: const Text('Accounts')),
-          body: _AccountsTab(
-            loading: _loading,
-            customAccounts: _accounts,
-            cashBalance: _cashBalance,
-            onAddAccount: _openAddAccountSheet,
-            onEditAccount: _openEditAccountSheet,
-          ),
+        builder: (context) => _AccountsManagePage(
+          onAddAccount: _openAddAccountSheet,
+          onEditAccount: _openEditAccountSheet,
         ),
       ),
     );
@@ -269,7 +266,7 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
       id: expense?.id,
       title: result.titleText.isEmpty ? categoryText : result.titleText,
       amount: amount,
-      currency: expense?.currency ?? 'USD',
+      currency: expense?.currency ?? CurrencyService.code,
       date: expense?.date ?? DateTime.now(),
       category: categoryText.isEmpty ? 'General' : categoryText,
       accountType: result.accountType,
@@ -404,6 +401,7 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
         onAccountsTap: _openAccountsPage,
         onCategoriesTap: _openCategoriesPage,
         onBudgetsTap: _openBudgetsPage,
+        onCurrencyChanged: () => setState(() {}),
       ),
     ];
 
@@ -885,6 +883,76 @@ class _CategoryBreakdownListItem extends StatelessWidget {
   }
 }
 
+class _AccountsManagePage extends StatefulWidget {
+  const _AccountsManagePage({
+    required this.onAddAccount,
+    required this.onEditAccount,
+  });
+
+  final Future<void> Function() onAddAccount;
+  final Future<void> Function(Account account) onEditAccount;
+
+  @override
+  State<_AccountsManagePage> createState() => _AccountsManagePageState();
+}
+
+class _AccountsManagePageState extends State<_AccountsManagePage> {
+  bool _loading = true;
+  List<Account> _accounts = [];
+  double _cashBalance = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final db = DBService.instance;
+    final results = await Future.wait([
+      db.getAllAccounts(),
+      db.getAllExpenses(),
+    ]);
+    final expenses = results[1] as List<Expense>;
+    final cashBalance = expenses.fold<double>(0, (sum, expense) {
+      final signed = expense.isIncome ? expense.amount : -expense.amount;
+      return expense.accountType == kCashAccount ? sum + signed : sum;
+    });
+    if (mounted) {
+      setState(() {
+        _accounts = results[0] as List<Account>;
+        _cashBalance = cashBalance;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _handleAdd() async {
+    await widget.onAddAccount();
+    await _load();
+  }
+
+  Future<void> _handleEdit(Account account) async {
+    await widget.onEditAccount(account);
+    await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Accounts')),
+      body: _AccountsTab(
+        loading: _loading,
+        customAccounts: _accounts,
+        cashBalance: _cashBalance,
+        onAddAccount: _handleAdd,
+        onEditAccount: _handleEdit,
+      ),
+    );
+  }
+}
+
 class _AccountsTab extends StatelessWidget {
   const _AccountsTab({
     required this.loading,
@@ -897,7 +965,7 @@ class _AccountsTab extends StatelessWidget {
   final bool loading;
   final List<Account> customAccounts;
   final double cashBalance;
-  final VoidCallback onAddAccount;
+  final Future<void> Function() onAddAccount;
   final Future<void> Function(Account account) onEditAccount;
 
   @override
@@ -2010,10 +2078,9 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
       text: expense?.category ?? '',
     );
     _noteController = TextEditingController(text: expense?.notes ?? '');
-    _accountType =
-        expense?.accountType == 'bank' ? kCashAccount : (expense?.accountType ?? kCashAccount);
     _transactionType = expense?.transactionType ?? kExpenseType;
-    _selectedCategory = expense?.category ?? '';
+    _accountType = expense?.accountType ?? _defaultAccountType();
+    _selectedCategory = expense?.category ?? _defaultCategory();
   }
 
   List<String> get _categoryOptions {
@@ -2026,11 +2093,38 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
     return widget.categories.map((category) => category.name).toList();
   }
 
+  List<_AccountChoice> get _accountChoices => [
+        const _AccountChoice(
+          value: kCashAccount,
+          label: 'Cash',
+          icon: Icons.payments_outlined,
+          color: kCashTint,
+        ),
+        ...widget.availableAccounts.map(
+          (account) => _AccountChoice(
+            value: account.name,
+            label: account.name,
+            icon: Icons.account_balance_wallet_outlined,
+            color: Color(account.colorValue),
+          ),
+        ),
+      ];
+
+  String _defaultAccountType() {
+    final options = _accountChoices;
+    return options.length == 1 ? options.first.value : '';
+  }
+
+  String _defaultCategory() {
+    final options = _categoryOptions;
+    return options.length == 1 ? options.first : '';
+  }
+
   void _setTransactionType(String type) {
     setState(() {
       _transactionType = type;
       if (widget.expense == null) {
-        _selectedCategory = '';
+        _selectedCategory = _defaultCategory();
       } else if (type == kIncomeType) {
         if (!kIncomeCategories.contains(_selectedCategory)) {
           _selectedCategory = '';
@@ -2074,6 +2168,12 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
   }
 
   void _save() {
+    if (_accountType.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an account')),
+      );
+      return;
+    }
     if (_categoryOptions.isNotEmpty && _selectedCategory.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a category')),
@@ -2087,22 +2187,7 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final palette = context.palette;
-    final accountOptions = <_AccountChoice>[
-      const _AccountChoice(
-        value: kCashAccount,
-        label: 'Cash',
-        icon: Icons.payments_outlined,
-        color: kCashTint,
-      ),
-      ...widget.availableAccounts.map(
-        (account) => _AccountChoice(
-          value: account.name,
-          label: account.name,
-          icon: Icons.account_balance_wallet_outlined,
-          color: Color(account.colorValue),
-        ),
-      ),
-    ];
+    final accountOptions = _accountChoices;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -2482,6 +2567,9 @@ class _AddAccountPageState extends State<_AddAccountPage> {
                   final balance =
                       double.tryParse(_balanceController.text.trim()) ?? 0;
                   if (name.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter an account name')),
+                    );
                     return;
                   }
 
@@ -2606,7 +2694,7 @@ class _ModernToggleSection extends StatelessWidget {
   }
 }
 
-String _money(double value) => '\$${value.toStringAsFixed(2)}';
+String _money(double value) => CurrencyService.format(value);
 
 InputDecoration _themedInputDecoration(
   BuildContext context, {
