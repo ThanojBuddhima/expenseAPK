@@ -55,3 +55,11 @@ flutter test
 - Encrypted cloud backup
 - Google Drive integration
 - Backup restore / backup history
+
+# Expense Manager
+
+## 📥 Download
+
+[![Download APK](https://img.shields.io/badge/Download-Latest_APK-success?style=for-the-badge)](https://github.com/ThanojBuddhima/expenseAPK/releases/latest)
+
+Offline-first expense tracking application built with Flutter.
