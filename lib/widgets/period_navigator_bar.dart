@@ -38,8 +38,10 @@ class PeriodNavigatorBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final textStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w600,
+          color: palette.textPrimary,
         );
 
     return Padding(
@@ -55,7 +57,11 @@ class PeriodNavigatorBar extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   onPressed: () => onChanged(period.previous()),
-                  icon: const Icon(Icons.chevron_left_rounded, size: 28),
+                  icon: Icon(
+                    Icons.chevron_left_rounded,
+                    size: 28,
+                    color: palette.textPrimary,
+                  ),
                 ),
                 Flexible(
                   child: InkWell(
@@ -80,7 +86,11 @@ class PeriodNavigatorBar extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   onPressed: () => onChanged(period.next()),
-                  icon: const Icon(Icons.chevron_right_rounded, size: 28),
+                  icon: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 28,
+                    color: palette.textPrimary,
+                  ),
                 ),
               ],
             ),
@@ -105,14 +115,14 @@ class PeriodNavigatorBar extends StatelessWidget {
                   Text(
                     period.granularity.label,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: palette.textSecondary,
                           fontWeight: FontWeight.w500,
                         ),
                   ),
-                  const Icon(
+                  Icon(
                     Icons.keyboard_arrow_down_rounded,
                     size: 20,
-                    color: AppColors.textSecondary,
+                    color: palette.textSecondary,
                   ),
                 ],
               ),

@@ -538,12 +538,6 @@ class _HomeTabState extends State<_HomeTab> {
                                 setState(() => _searchQuery = '');
                               },
                             ),
-                      filled: true,
-                      fillColor: AppColors.card,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: const BorderSide(color: kBorder),
-                      ),
                     ),
                   ),
                 ),
@@ -826,10 +820,11 @@ class _CategoryBreakdownListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: palette.card,
         borderRadius: BorderRadius.circular(AppTheme.cardRadius),
         boxShadow: [
           BoxShadow(
@@ -987,6 +982,7 @@ class _BudgetProgressCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = limit > 0 ? (spent / limit).clamp(0.0, 1.0) : 0.0;
     final overBudget = spent > limit;
+    final palette = context.palette;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -1007,7 +1003,7 @@ class _BudgetProgressCard extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: progress,
                 minHeight: 10,
-                backgroundColor: kBorder,
+                backgroundColor: palette.border,
                 color: overBudget ? kExpenseTint : kPrimaryBlue,
               ),
             ),
@@ -1059,10 +1055,11 @@ class _SummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: palette.card,
         borderRadius: BorderRadius.circular(AppTheme.cardRadius),
         boxShadow: [
           BoxShadow(
@@ -1111,19 +1108,16 @@ class _SummaryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(20),
-      ),
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: kTextSecondary,
+                  color: palette.textSecondary,
                 ),
           ),
           const SizedBox(height: 8),
@@ -1172,10 +1166,11 @@ class _MiniMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kInputBackground,
+        color: palette.input,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
@@ -1240,7 +1235,7 @@ class _PieCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: kInputBackground,
+        color: context.palette.input,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -1258,7 +1253,10 @@ class _PieCard extends StatelessWidget {
           AspectRatio(
             aspectRatio: 1.2,
             child: CustomPaint(
-              painter: _PieChartPainter(segments),
+              painter: _PieChartPainter(
+                segments,
+                holeColor: context.palette.card,
+              ),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1300,10 +1298,11 @@ class _LegendPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: kInputBackground,
+        color: palette.input,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -1333,9 +1332,10 @@ class _PieSegment {
 }
 
 class _PieChartPainter extends CustomPainter {
-  const _PieChartPainter(this.segments);
+  const _PieChartPainter(this.segments, {required this.holeColor});
 
   final List<_PieSegment> segments;
+  final Color holeColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1362,13 +1362,14 @@ class _PieChartPainter extends CustomPainter {
     canvas.drawCircle(
       center,
       radius * 0.5,
-      Paint()..color = Colors.white,
+      Paint()..color = holeColor,
     );
   }
 
   @override
   bool shouldRepaint(covariant _PieChartPainter oldDelegate) {
-    return oldDelegate.segments != segments;
+    return oldDelegate.segments != segments ||
+        oldDelegate.holeColor != holeColor;
   }
 }
 
@@ -1381,6 +1382,7 @@ class _TransactionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final accountColor = expense.accountType == kCashAccount
         ? kCashTint
         : kPrimaryBlue;
@@ -1428,7 +1430,7 @@ class _TransactionCard extends StatelessWidget {
         onTap: onEdit,
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.card,
+            color: palette.card,
             borderRadius: BorderRadius.circular(AppTheme.cardRadius),
             boxShadow: [
               BoxShadow(
@@ -1461,7 +1463,7 @@ class _TransactionCard extends StatelessWidget {
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
-                            ?.copyWith(color: kTextSecondary, fontSize: 12),
+                            ?.copyWith(color: palette.textSecondary, fontSize: 12),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1481,7 +1483,7 @@ class _TransactionCard extends StatelessWidget {
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
-                            ?.copyWith(color: kTextSecondary, fontSize: 12),
+                            ?.copyWith(color: palette.textSecondary, fontSize: 12),
                       ),
                     ],
                   ),
@@ -1543,6 +1545,7 @@ class _DayTransactionGroupHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final income = expenses
         .where((expense) => expense.isIncome)
         .fold<double>(0, (sum, item) => sum + item.amount);
@@ -1554,7 +1557,7 @@ class _DayTransactionGroupHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: kInputBackground,
+        color: palette.input,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
@@ -1563,7 +1566,7 @@ class _DayTransactionGroupHeader extends StatelessWidget {
             height: 46,
             width: 46,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: palette.card,
               borderRadius: BorderRadius.circular(14),
             ),
             child: Column(
@@ -1576,7 +1579,7 @@ class _DayTransactionGroupHeader extends StatelessWidget {
                 Text(
                   _weekdayLabel(date.weekday),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: kTextPrimary.withOpacity(0.7),
+                        color: palette.textSecondary,
                         fontSize: 10,
                       ),
                 ),
@@ -1649,7 +1652,7 @@ class _AccountBalanceCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: kInputBackground,
+        color: context.palette.input,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -1718,7 +1721,7 @@ class _SettingTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: kInputBackground,
+        color: context.palette.input,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -1747,15 +1750,17 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: palette.card,
         borderRadius: BorderRadius.circular(AppTheme.cardRadius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1767,16 +1772,16 @@ class _EmptyState extends StatelessWidget {
             height: 72,
             width: 72,
             decoration: BoxDecoration(
-              color: AppColors.pastelOrange,
+              color: palette.emptyIconBg,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 34, color: kPrimaryBlue),
+            child: Icon(icon, size: 34, color: palette.emptyIconFg),
           ),
           const SizedBox(height: 12),
           Text(
             title,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: kTextPrimary,
+                  color: palette.textPrimary,
                 ),
           ),
           const SizedBox(height: 6),
@@ -1784,7 +1789,7 @@ class _EmptyState extends StatelessWidget {
             subtitle,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: kTextSecondary,
+                  color: palette.textSecondary,
                 ),
           ),
         ],
@@ -1801,6 +1806,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -1811,7 +1817,7 @@ class _SectionHeader extends StatelessWidget {
             style: Theme.of(context)
                 .textTheme
                 .bodySmall
-                ?.copyWith(color: kTextPrimary.withOpacity(0.7)),
+                ?.copyWith(color: palette.textSecondary),
           ),
       ],
     );
@@ -1831,8 +1837,7 @@ class _BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
+    final palette = context.palette;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: FrostedBar(
@@ -1843,8 +1848,7 @@ class _BottomNavBar extends StatelessWidget {
             margin: const EdgeInsets.only(top: 8),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             decoration: BoxDecoration(
-              color: (isDark ? AppColors.cardDark : AppColors.card)
-                  .withValues(alpha: 0.92),
+              color: palette.card.withValues(alpha: 0.92),
               borderRadius: BorderRadius.circular(32),
               boxShadow: [
                 BoxShadow(
@@ -1938,6 +1942,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Expanded(
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -1949,13 +1954,13 @@ class _NavItem extends StatelessWidget {
             Icon(
               icon,
               size: 24,
-              color: active ? kPrimaryBlue : kTextSecondary,
+              color: active ? kPrimaryBlue : palette.textSecondary,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: active ? kPrimaryBlue : kTextSecondary,
+                color: active ? kPrimaryBlue : palette.textSecondary,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                 fontSize: 11,
               ),
@@ -2101,6 +2106,7 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final palette = context.palette;
     final accountOptions = <_AccountChoice>[
       const _AccountChoice(
         value: kCashAccount,
@@ -2126,14 +2132,14 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
         scrolledUnderElevation: 0,
         leading: IconButton(
           onPressed: () => _close(false),
-          icon: const Icon(Icons.close_rounded, color: kTextPrimary),
+          icon: Icon(Icons.close_rounded, color: palette.textPrimary),
         ),
         title: Text(
           widget.expense == null
               ? (_transactionType == kIncomeType ? 'Add income' : 'Add expense')
               : (_transactionType == kIncomeType ? 'Edit income' : 'Edit expense'),
-          style: const TextStyle(
-            color: kTextPrimary,
+          style: TextStyle(
+            color: palette.textPrimary,
             fontWeight: FontWeight.w600,
             fontSize: 18,
           ),
@@ -2177,35 +2183,14 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
               icon: Icons.title_rounded,
               child: TextField(
                 controller: _titleController,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: kTextPrimary,
+                  color: palette.textPrimary,
                 ),
-                decoration: InputDecoration(
+                decoration: _themedInputDecoration(
+                  context,
                   hintText: 'Coffee, groceries, salary...',
-                  hintStyle: TextStyle(
-                    color: kTextSecondary.withOpacity(0.5),
-                    fontSize: 16,
-                  ),
-                  filled: true,
-                  fillColor: kInputBackground,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: kBorder, width: 1),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: kPrimaryBlue, width: 2),
-                  ),
                 ),
               ),
             ),
@@ -2218,41 +2203,15 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
                 autofocus: true,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  color: kTextPrimary,
+                  color: palette.textPrimary,
                 ),
-                decoration: InputDecoration(
+                decoration: _themedInputDecoration(
+                  context,
                   hintText: '0.00',
-                  hintStyle: TextStyle(
-                    color: kTextSecondary.withOpacity(0.5),
-                    fontSize: 18,
-                  ),
-                  filled: true,
-                  fillColor: kInputBackground,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: kBorder,
-                      width: 1,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: kPrimaryBlue,
-                      width: 2,
-                    ),
-                  ),
+                  hintFontSize: 18,
                 ),
               ),
             ),
@@ -2326,41 +2285,14 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
               child: TextField(
                 controller: _noteController,
                 maxLines: 4,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: kTextPrimary,
+                  color: palette.textPrimary,
                 ),
-                decoration: InputDecoration(
+                decoration: _themedInputDecoration(
+                  context,
                   hintText: 'Add a note (optional)',
-                  hintStyle: TextStyle(
-                    color: kTextSecondary.withOpacity(0.5),
-                    fontSize: 16,
-                  ),
-                  filled: true,
-                  fillColor: kInputBackground,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: kBorder,
-                      width: 1,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: kPrimaryBlue,
-                      width: 2,
-                    ),
-                  ),
                 ),
               ),
             ),
@@ -2473,6 +2405,7 @@ class _AddAccountPageState extends State<_AddAccountPage> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isEditing = widget.account != null;
+    final palette = context.palette;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -2482,12 +2415,12 @@ class _AddAccountPageState extends State<_AddAccountPage> {
         scrolledUnderElevation: 0,
         leading: IconButton(
           onPressed: _close,
-          icon: const Icon(Icons.close_rounded, color: kTextPrimary),
+          icon: Icon(Icons.close_rounded, color: palette.textPrimary),
         ),
         title: Text(
           isEditing ? 'Edit account' : 'Add account',
-          style: const TextStyle(
-            color: kTextPrimary,
+          style: TextStyle(
+            color: palette.textPrimary,
             fontWeight: FontWeight.w600,
             fontSize: 18,
           ),
@@ -2505,42 +2438,12 @@ class _AddAccountPageState extends State<_AddAccountPage> {
               child: TextField(
                 controller: _nameController,
                 autofocus: true,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: kTextPrimary,
+                  color: palette.textPrimary,
                 ),
-                decoration: InputDecoration(
-                  hintText: 'Savings',
-                  hintStyle: TextStyle(
-                    color: kTextSecondary.withOpacity(0.5),
-                    fontSize: 16,
-                  ),
-                  filled: true,
-                  fillColor: kInputBackground,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: kBorder,
-                      width: 1,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: kPrimaryBlue,
-                      width: 2,
-                    ),
-                  ),
-                ),
+                decoration: _themedInputDecoration(context, hintText: 'Savings'),
               ),
             ),
             const SizedBox(height: 20),
@@ -2562,12 +2465,12 @@ class _AddAccountPageState extends State<_AddAccountPage> {
                           height: 42,
                           width: 42,
                           decoration: BoxDecoration(
-                            color: AppColors.card,
+                            color: palette.card,
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: _selectedColorValue == color.value
                                   ? color
-                                  : AppColors.border,
+                                  : palette.border,
                               width:
                                   _selectedColorValue == color.value ? 2 : 1,
                             ),
@@ -2592,41 +2495,15 @@ class _AddAccountPageState extends State<_AddAccountPage> {
                 readOnly: isEditing,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  color: kTextPrimary,
+                  color: palette.textPrimary,
                 ),
-                decoration: InputDecoration(
+                decoration: _themedInputDecoration(
+                  context,
                   hintText: '0.00',
-                  hintStyle: TextStyle(
-                    color: kTextSecondary.withOpacity(0.5),
-                    fontSize: 18,
-                  ),
-                  filled: true,
-                  fillColor: kInputBackground,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: kBorder,
-                      width: 1,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: kPrimaryBlue,
-                      width: 2,
-                    ),
-                  ),
+                  hintFontSize: 18,
                 ),
               ),
             ),
@@ -2737,6 +2614,7 @@ class _ModernAddFieldSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2748,7 +2626,7 @@ class _ModernAddFieldSection extends StatelessWidget {
               title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: kTextPrimary,
+                    color: palette.textPrimary,
                     fontSize: 15,
                   ),
             ),
@@ -2772,6 +2650,7 @@ class _ModernToggleSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2779,7 +2658,7 @@ class _ModernToggleSection extends StatelessWidget {
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: kTextPrimary,
+                color: palette.textPrimary,
                 fontSize: 15,
               ),
         ),
@@ -2791,6 +2670,36 @@ class _ModernToggleSection extends StatelessWidget {
 }
 
 String _money(double value) => '\$${value.toStringAsFixed(2)}';
+
+InputDecoration _themedInputDecoration(
+  BuildContext context, {
+  required String hintText,
+  double hintFontSize = 16,
+}) {
+  final palette = context.palette;
+  return InputDecoration(
+    hintText: hintText,
+    hintStyle: TextStyle(
+      color: palette.textSecondary.withValues(alpha: 0.5),
+      fontSize: hintFontSize,
+    ),
+    filled: true,
+    fillColor: palette.input,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: palette.border, width: 1),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: kPrimaryBlue, width: 2),
+    ),
+  );
+}
 
 String _plainMoney(double value) => value.toStringAsFixed(2);
 

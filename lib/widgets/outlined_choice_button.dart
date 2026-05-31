@@ -22,10 +22,18 @@ class OutlinedChoiceButton extends StatelessWidget {
   final Color color;
   final bool compact;
 
+  Color _accentColor(BuildContext context) {
+    if (color == AppColors.textPrimary) {
+      return context.palette.textPrimary;
+    }
+    return AppColors.readableAccent(color);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final radius = compact ? 20.0 : AppTheme.cardRadius;
-    final accent = AppColors.readableAccent(color);
+    final accent = _accentColor(context);
     final labelStyle = TextStyle(
       fontSize: compact ? 13 : 14,
       fontWeight: FontWeight.w600,
@@ -33,11 +41,11 @@ class OutlinedChoiceButton extends StatelessWidget {
     );
 
     return Material(
-      color: AppColors.card,
+      color: palette.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radius),
         side: BorderSide(
-          color: isSelected ? accent : AppColors.border,
+          color: isSelected ? accent : palette.border,
           width: isSelected ? 2 : 1,
         ),
       ),
@@ -59,7 +67,7 @@ class OutlinedChoiceButton extends StatelessWidget {
                       subtitle!,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
+                            color: palette.textPrimary,
                           ),
                     ),
                   ],

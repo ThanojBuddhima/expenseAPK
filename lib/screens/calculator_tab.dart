@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 
-const Color _kCalcBg = AppColors.inputBackground;
 const Color _kCalcOp = AppColors.primaryDeep;
-const Color _kCalcAction = AppColors.textSecondary;
 
 class CalculatorTab extends StatefulWidget {
   const CalculatorTab({super.key});
@@ -182,6 +180,7 @@ class _CalculatorTabState extends State<CalculatorTab> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return SafeArea(
       bottom: false,
       child: Padding(
@@ -202,7 +201,7 @@ class _CalculatorTabState extends State<CalculatorTab> {
                         _expression,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w500,
-                              color: AppColors.textSecondary,
+                              color: palette.textSecondary,
                             ),
                       ),
                     ),
@@ -260,11 +259,16 @@ class _CalculatorTabState extends State<CalculatorTab> {
                   child: Column(
                     children: [
                       keypadRow([
-                        _CalculatorButton(_kCalcAction, _onClear, label: 'C', isAction: true),
+                        _CalculatorButton(
+                          palette.textSecondary,
+                          _onClear,
+                          label: 'C',
+                          isAction: true,
+                        ),
                         _CalculatorButton(_kCalcOp, () => _onOperation('÷'), label: '÷', isOperation: true),
                         _CalculatorButton(_kCalcOp, () => _onOperation('×'), label: '×', isOperation: true),
                         _CalculatorButton(
-                          _kCalcAction,
+                          palette.textSecondary,
                           _onBackspace,
                           icon: Icons.backspace_outlined,
                           isAction: true,
@@ -272,16 +276,16 @@ class _CalculatorTabState extends State<CalculatorTab> {
                       ]),
                       SizedBox(height: spacing),
                       keypadRow([
-                        _CalculatorButton(_kCalcBg, () => _onNumberPressed('7'), label: '7'),
-                        _CalculatorButton(_kCalcBg, () => _onNumberPressed('8'), label: '8'),
-                        _CalculatorButton(_kCalcBg, () => _onNumberPressed('9'), label: '9'),
+                        _CalculatorButton(palette.input, () => _onNumberPressed('7'), label: '7', numberStyle: true),
+                        _CalculatorButton(palette.input, () => _onNumberPressed('8'), label: '8', numberStyle: true),
+                        _CalculatorButton(palette.input, () => _onNumberPressed('9'), label: '9', numberStyle: true),
                         _CalculatorButton(_kCalcOp, () => _onOperation('-'), label: '-', isOperation: true),
                       ]),
                       SizedBox(height: spacing),
                       keypadRow([
-                        _CalculatorButton(_kCalcBg, () => _onNumberPressed('4'), label: '4'),
-                        _CalculatorButton(_kCalcBg, () => _onNumberPressed('5'), label: '5'),
-                        _CalculatorButton(_kCalcBg, () => _onNumberPressed('6'), label: '6'),
+                        _CalculatorButton(palette.input, () => _onNumberPressed('4'), label: '4', numberStyle: true),
+                        _CalculatorButton(palette.input, () => _onNumberPressed('5'), label: '5', numberStyle: true),
+                        _CalculatorButton(palette.input, () => _onNumberPressed('6'), label: '6', numberStyle: true),
                         _CalculatorButton(_kCalcOp, () => _onOperation('+'), label: '+', isOperation: true),
                       ]),
                       SizedBox(height: spacing),
@@ -298,13 +302,13 @@ class _CalculatorTabState extends State<CalculatorTab> {
                                     child: Row(
                                       children: [
                                         sizedButton(_CalculatorButton(
-                                            _kCalcBg, () => _onNumberPressed('1'), label: '1')),
+                                            palette.input, () => _onNumberPressed('1'), label: '1', numberStyle: true)),
                                         SizedBox(width: spacing),
                                         sizedButton(_CalculatorButton(
-                                            _kCalcBg, () => _onNumberPressed('2'), label: '2')),
+                                            palette.input, () => _onNumberPressed('2'), label: '2', numberStyle: true)),
                                         SizedBox(width: spacing),
                                         sizedButton(_CalculatorButton(
-                                            _kCalcBg, () => _onNumberPressed('3'), label: '3')),
+                                            palette.input, () => _onNumberPressed('3'), label: '3', numberStyle: true)),
                                       ],
                                     ),
                                   ),
@@ -313,13 +317,13 @@ class _CalculatorTabState extends State<CalculatorTab> {
                                     child: Row(
                                       children: [
                                         sizedButton(_CalculatorButton(
-                                            _kCalcAction, _onPercent, label: '%', isAction: true)),
+                                            palette.textSecondary, _onPercent, label: '%', isAction: true)),
                                         SizedBox(width: spacing),
                                         sizedButton(_CalculatorButton(
-                                            _kCalcBg, () => _onNumberPressed('0'), label: '0')),
+                                            palette.input, () => _onNumberPressed('0'), label: '0', numberStyle: true)),
                                         SizedBox(width: spacing),
                                         sizedButton(_CalculatorButton(
-                                            _kCalcBg, _onDecimalPressed, label: '.')),
+                                            palette.input, _onDecimalPressed, label: '.', numberStyle: true)),
                                       ],
                                     ),
                                   ),
@@ -360,6 +364,7 @@ class _CalculatorButton extends StatelessWidget {
     this.icon,
     this.isOperation = false,
     this.isAction = false,
+    this.numberStyle = false,
     this.fillCell = false,
   }) : assert(label != null || icon != null);
 
@@ -369,12 +374,16 @@ class _CalculatorButton extends StatelessWidget {
   final VoidCallback onPressed;
   final bool isOperation;
   final bool isAction;
+  final bool numberStyle;
   final bool fillCell;
 
   @override
   Widget build(BuildContext context) {
-    final textColor =
-        isOperation || isAction ? Colors.white : AppColors.textPrimary;
+    final textColor = isOperation || isAction
+        ? Colors.white
+        : (numberStyle
+            ? context.palette.textPrimary
+            : Theme.of(context).colorScheme.onSurface);
 
     final content = Center(
       child: icon != null

@@ -66,6 +66,90 @@ class AppColors {
   }
 }
 
+/// Theme-aware surface and text colors for widgets that cannot use const light tokens.
+@immutable
+class AppPalette extends ThemeExtension<AppPalette> {
+  const AppPalette({
+    required this.card,
+    required this.border,
+    required this.input,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.emptyIconBg,
+    required this.emptyIconFg,
+  });
+
+  final Color card;
+  final Color border;
+  final Color input;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color emptyIconBg;
+  final Color emptyIconFg;
+
+  static const light = AppPalette(
+    card: AppColors.card,
+    border: AppColors.border,
+    input: AppColors.inputBackground,
+    textPrimary: AppColors.textPrimary,
+    textSecondary: AppColors.textSecondary,
+    emptyIconBg: AppColors.pastelOrange,
+    emptyIconFg: AppColors.primary,
+  );
+
+  static const dark = AppPalette(
+    card: AppColors.cardDark,
+    border: AppColors.borderDark,
+    input: AppColors.inputBackgroundDark,
+    textPrimary: AppColors.textPrimaryDark,
+    textSecondary: AppColors.textSecondaryDark,
+    emptyIconBg: Color(0xFF3D3118),
+    emptyIconFg: Color(0xFFFFB74D),
+  );
+
+  @override
+  AppPalette copyWith({
+    Color? card,
+    Color? border,
+    Color? input,
+    Color? textPrimary,
+    Color? textSecondary,
+    Color? emptyIconBg,
+    Color? emptyIconFg,
+  }) {
+    return AppPalette(
+      card: card ?? this.card,
+      border: border ?? this.border,
+      input: input ?? this.input,
+      textPrimary: textPrimary ?? this.textPrimary,
+      textSecondary: textSecondary ?? this.textSecondary,
+      emptyIconBg: emptyIconBg ?? this.emptyIconBg,
+      emptyIconFg: emptyIconFg ?? this.emptyIconFg,
+    );
+  }
+
+  @override
+  AppPalette lerp(ThemeExtension<AppPalette>? other, double t) {
+    if (other is! AppPalette) {
+      return this;
+    }
+    return AppPalette(
+      card: Color.lerp(card, other.card, t)!,
+      border: Color.lerp(border, other.border, t)!,
+      input: Color.lerp(input, other.input, t)!,
+      textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
+      textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
+      emptyIconBg: Color.lerp(emptyIconBg, other.emptyIconBg, t)!,
+      emptyIconFg: Color.lerp(emptyIconFg, other.emptyIconFg, t)!,
+    );
+  }
+}
+
+extension AppPaletteContext on BuildContext {
+  AppPalette get palette =>
+      Theme.of(this).extension<AppPalette>() ?? AppPalette.light;
+}
+
 class AppTheme {
   static const double cardRadius = 24;
   static const double buttonRadius = 28;
@@ -95,6 +179,7 @@ class AppTheme {
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
+      extensions: [isDark ? AppPalette.dark : AppPalette.light],
       scaffoldBackgroundColor: surface,
       cardTheme: CardThemeData(
         color: isDark ? AppColors.cardDark : AppColors.card,
@@ -126,6 +211,9 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: isDark ? AppColors.inputBackgroundDark : AppColors.inputBackground,
+        hintStyle: TextStyle(
+          color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
@@ -142,8 +230,8 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.card,
-        selectedColor: AppColors.card,
+        backgroundColor: isDark ? AppColors.cardDark : AppColors.card,
+        selectedColor: isDark ? AppColors.cardDark : AppColors.card,
         labelStyle: TextStyle(color: onSurface),
         side: BorderSide(color: isDark ? AppColors.borderDark : AppColors.border),
         shape: RoundedRectangleBorder(

@@ -79,16 +79,17 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
             children: _palette.map((color) {
               final colorValue = color.toARGB32();
               final selected = _selectedColor == colorValue;
+              final palette = context.palette;
               return GestureDetector(
                 onTap: () => setState(() => _selectedColor = colorValue),
                 child: Container(
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: AppColors.card,
+                    color: palette.card,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: selected ? color : AppColors.border,
+                      color: selected ? color : palette.border,
                       width: selected ? 2 : 1,
                     ),
                   ),
