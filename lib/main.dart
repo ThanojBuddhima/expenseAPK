@@ -1,52 +1,97 @@
 import 'dart:collection';
 import 'dart:math' as math;
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart';
 import 'models/account.dart';
+import 'models/budget.dart';
+import 'models/category.dart';
 import 'models/expense.dart';
+import 'models/time_period.dart';
+import 'screens/auth_lock_screen.dart';
+import 'screens/categories_tab.dart';
+import 'screens/calculator_tab.dart';
+import 'screens/settings_tab.dart';
+import 'screens/splash_screen.dart';
+import 'services/app_preferences.dart';
 import 'services/db_service.dart';
+import 'widgets/frosted_bar.dart';
+import 'widgets/period_navigator_bar.dart';
+import 'widgets/spending_trend_chart.dart';
 
 const String kCashAccount = 'cash';
-const String kBankAccount = 'bank';
 const String kIncomeType = 'income';
 const String kExpenseType = 'expense';
-const Color kPrimaryBlue = Color(0xFF1F2937);
-const Color kPrimaryBlueDeep = Color(0xFF111827);
-const Color kSurface = Color(0xFFFAFAFA);
-const Color kTextPrimary = Color(0xFF111827);
-const Color kTextSecondary = Color(0xFF6B7280);
-const Color kBorder = Color(0xFFE5E7EB);
-const Color kCashTint = Color(0xFF374151);
-const Color kBankTint = Color(0xFF4B5563);
-const Color kIncomeTint = Color(0xFF10B981);
-const Color kExpenseTint = Color(0xFFEF4444);
-const Color kInputBackground = Color(0xFFFAFAFA);
+const List<String> kIncomeCategories = [
+  'Salary',
+  'Bonus',
+  'Allowance',
+  'Other',
+];
+const String kDefaultIncomeCategory = 'Salary';
+const Color kPrimaryBlue = AppColors.primary;
+const Color kPrimaryBlueDeep = AppColors.primaryDeep;
+const Color kSurface = AppColors.surface;
+const Color kTextPrimary = AppColors.textPrimary;
+const Color kTextSecondary = AppColors.textSecondary;
+const Color kBorder = AppColors.border;
+const Color kCashTint = AppColors.cashTint;
+const Color kBankTint = AppColors.cashTint;
+const Color kIncomeTint = AppColors.incomeTint;
+const Color kExpenseTint = AppColors.expenseTint;
+const Color kInputBackground = AppColors.inputBackground;
 const List<Color> kAccountColorOptions = [
-  kCashTint,
-  kBankTint,
-  kIncomeTint,
-  kExpenseTint,
-  Color(0xFFF59E0B),
-  Color(0xFF8B5CF6),
-  Color(0xFF06B6D4),
+  AppColors.primary,
+  AppColors.incomeTint,
+  AppColors.expenseTint,
+  AppColors.pastelPink,
+  AppColors.pastelYellow,
+  AppColors.pastelLavender,
+  AppColors.pastelOrange,
+  AppColors.darkBanner,
 ];
 
 enum FilterMode { day, week, month, annually }
 
 Future<void> initializeApp() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppPreferences.instance.init();
   await DBService.instance.init();
-  runApp(const MyApp());
+  runApp(const ExpenseApp());
 }
 
 void main() {
   initializeApp();
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class ExpenseApp extends StatefulWidget {
+  const ExpenseApp({super.key});
+
+  @override
+  State<ExpenseApp> createState() => _ExpenseAppState();
+}
+
+class _ExpenseAppState extends State<ExpenseApp> {
+  ThemeMode _themeMode = ThemeMode.light;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final mode = await AppPreferences.instance.themeMode;
+    if (mounted) {
+      setState(() => _themeMode = mode);
+    }
+  }
+
+  void setThemeMode(ThemeMode mode) {
+    setState(() => _themeMode = mode);
+    AppPreferences.instance.setThemeMode(mode);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,27 +99,22 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Smart Offline Expense Manager',
       scrollBehavior: const _NoScrollbarBehavior(),
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: kPrimaryBlue,
-          brightness: Brightness.light,
-        ),
-        scaffoldBackgroundColor: kSurface,
-        textTheme: const TextTheme(
-          headlineMedium: TextStyle(fontWeight: FontWeight.w700),
-          titleLarge: TextStyle(fontWeight: FontWeight.w700),
-          titleMedium: TextStyle(fontWeight: FontWeight.w600),
-          bodyMedium: TextStyle(color: kTextSecondary),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: _themeMode,
+      home: SplashScreen(
+        buildDashboard: () => ExpenseDashboardPage(
+          onThemeChanged: setThemeMode,
         ),
       ),
-      home: const ExpenseDashboardPage(),
     );
   }
 }
 
 class ExpenseDashboardPage extends StatefulWidget {
-  const ExpenseDashboardPage({super.key});
+  const ExpenseDashboardPage({super.key, required this.onThemeChanged});
+
+  final ValueChanged<ThemeMode> onThemeChanged;
 
   @override
   State<ExpenseDashboardPage> createState() => _ExpenseDashboardPageState();
@@ -95,6 +135,8 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
 
   List<Expense> _expenses = <Expense>[];
   List<Account> _accounts = <Account>[];
+  List<ExpenseCategory> _categories = <ExpenseCategory>[];
+  List<Budget> _budgets = <Budget>[];
   bool _loading = true;
   int _selectedTab = 0;
 
@@ -112,10 +154,14 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
     final results = await Future.wait([
       _db.getAllExpenses(),
       _db.getAllAccounts(),
+      _db.getAllCategories(),
+      _db.getAllBudgets(),
     ]);
 
     final items = results[0] as List<Expense>;
     final accounts = results[1] as List<Account>;
+    final categories = results[2] as List<ExpenseCategory>;
+    final budgets = results[3] as List<Budget>;
     if (!mounted) {
       return;
     }
@@ -123,6 +169,8 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
     setState(() {
       _expenses = items;
       _accounts = accounts;
+      _categories = categories;
+      _budgets = budgets;
       _loading = false;
     });
   }
@@ -148,59 +196,70 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
     await _openExpenseEditor(expense: expense);
   }
 
+  Future<void> _openCategoriesPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Categories')),
+          body: CategoriesTab(onChanged: _reloadDashboard),
+        ),
+      ),
+    );
+    await _reloadDashboard();
+  }
+
+  Future<void> _openAccountsPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Accounts')),
+          body: _AccountsTab(
+            loading: _loading,
+            customAccounts: _accounts,
+            cashBalance: _cashBalance,
+            onAddAccount: _openAddAccountSheet,
+            onEditAccount: _openEditAccountSheet,
+          ),
+        ),
+      ),
+    );
+    await _reloadAccounts();
+  }
+
   Future<void> _openExpenseEditor({Expense? expense}) async {
-    final amountController = TextEditingController(
-      text: expense == null ? '' : expense.amount.toStringAsFixed(2),
-    );
-    final categoryController = TextEditingController(
-      text: expense?.category ?? 'General',
-    );
-    final noteController = TextEditingController(text: expense?.notes ?? '');
-
-    String accountType = expense?.accountType ?? kCashAccount;
-    String transactionType = expense?.transactionType ?? kExpenseType;
-
-    final shouldSave = await Navigator.of(context).push<bool>(
+    final result = await Navigator.of(context).push<_ExpenseEditorResult>(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (context) {
           return _AddTransactionPage(
             expense: expense,
             availableAccounts: _accounts,
-            amountController: amountController,
-            categoryController: categoryController,
-            noteController: noteController,
-            accountType: accountType,
-            transactionType: transactionType,
-            onAccountTypeChanged: (value) => accountType = value,
-            onTransactionTypeChanged: (value) => transactionType = value,
+            categories: _categories,
           );
         },
       ),
     );
 
-    final amount = double.tryParse(amountController.text.trim());
-    amountController.dispose();
-    categoryController.dispose();
-    noteController.dispose();
-
-    if (shouldSave != true || amount == null || amount <= 0) {
+    if (result == null || !result.saved) {
       return;
     }
 
+    final amount = double.tryParse(result.amountText);
+    if (amount == null || amount <= 0) {
+      return;
+    }
+
+    final categoryText = result.categoryText;
     final updatedExpense = Expense(
       id: expense?.id,
+      title: result.titleText.isEmpty ? categoryText : result.titleText,
       amount: amount,
       currency: expense?.currency ?? 'USD',
       date: expense?.date ?? DateTime.now(),
-      category: categoryController.text.trim().isEmpty
-          ? 'General'
-          : categoryController.text.trim(),
-      accountType: accountType,
-      transactionType: transactionType,
-      notes: noteController.text.trim().isEmpty
-          ? null
-          : noteController.text.trim(),
+      category: categoryText.isEmpty ? 'General' : categoryText,
+      accountType: result.accountType,
+      transactionType: result.transactionType,
+      notes: result.noteText.isEmpty ? null : result.noteText,
       receiptPath: expense?.receiptPath,
     );
 
@@ -292,13 +351,6 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
     });
   }
 
-  double get _bankBalance {
-    return _expenses.fold<double>(0, (sum, expense) {
-      final signedAmount = expense.isIncome ? expense.amount : -expense.amount;
-      return expense.accountType == kBankAccount ? sum + signedAmount : sum;
-    });
-  }
-
   Map<String, double> get _categoryTotals {
     final totals = <String, double>{};
     for (final expense in _expenses) {
@@ -314,6 +366,8 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
       _HomeTab(
         loading: _loading,
         expenses: _orderedExpenses,
+        categories: _categories,
+        budgets: _budgets,
         incomeTotal: _incomeTotal,
         expenseTotal: _expenseTotal,
         netTotal: _netTotal,
@@ -329,15 +383,13 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
         netTotal: _netTotal,
         categoryTotals: _categoryTotals,
       ),
-      _AccountsTab(
-        loading: _loading,
-        customAccounts: _accounts,
-        cashBalance: _cashBalance,
-        bankBalance: _bankBalance,
-        onAddAccount: _openAddAccountSheet,
-        onEditAccount: _openEditAccountSheet,
+      CalculatorTab(),
+      SettingsTab(
+        onThemeChanged: widget.onThemeChanged,
+        onAccountsTap: _openAccountsPage,
+        onCategoriesTap: _openCategoriesPage,
+        onDataChanged: _reloadDashboard,
       ),
-      const _CalculatorTab(),
     ];
 
     return Scaffold(
@@ -360,6 +412,8 @@ class _HomeTab extends StatefulWidget {
   const _HomeTab({
     required this.loading,
     required this.expenses,
+    required this.categories,
+    required this.budgets,
     required this.incomeTotal,
     required this.expenseTotal,
     required this.netTotal,
@@ -370,6 +424,8 @@ class _HomeTab extends StatefulWidget {
 
   final bool loading;
   final List<Expense> expenses;
+  final List<ExpenseCategory> categories;
+  final List<Budget> budgets;
   final double incomeTotal;
   final double expenseTotal;
   final double netTotal;
@@ -382,286 +438,56 @@ class _HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<_HomeTab> {
-  int? _selectedYear;
-  int? _selectedMonth;
+  TimePeriod _period = TimePeriod.currentMonth();
+  String? _selectedCategory;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
 
-  static const List<String> _monthNames = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  List<int> get _availableYears {
-    return List<int>.generate(25, (index) => 2026 + index)
-      ..sort((left, right) => right.compareTo(left));
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
-
-  bool get _hasCustomDateFilter => _selectedYear != null;
 
   List<Expense> get _filteredExpenses {
-    if (_selectedYear != null) {
-      return widget.expenses.where((expense) {
-        if (expense.date.year != _selectedYear) {
-          return false;
-        }
-
-        if (_selectedMonth != null && expense.date.month != _selectedMonth) {
-          return false;
-        }
-
-        return true;
-      }).toList();
-    }
-
-    return widget.expenses;
-  }
-
-  String _activePeriodLabel() {
-    if (_selectedYear != null) {
-      if (_selectedMonth != null) {
-        return '${_monthNames[_selectedMonth! - 1]} $_selectedYear';
+    final query = _searchQuery.trim().toLowerCase();
+    return widget.expenses.where((expense) {
+      if (!_period.contains(expense.date)) {
+        return false;
       }
-
-      return '$_selectedYear';
-    }
-
-    return 'All transactions';
+      if (_selectedCategory != null && expense.category != _selectedCategory) {
+        return false;
+      }
+      if (query.isNotEmpty) {
+        final haystack =
+            '${expense.displayTitle} ${expense.category} ${expense.notes ?? ''}'
+                .toLowerCase();
+        if (!haystack.contains(query)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
   }
 
-  void _clearCustomDateFilter() {
-    setState(() {
-      _selectedYear = null;
-      _selectedMonth = null;
-    });
-  }
-
-  Future<void> _openFilterSheet() async {
+  Budget? get _currentOverallBudget {
     final now = DateTime.now();
-    final years = List<int>.from(_availableYears);
-    if (_selectedYear != null && !years.contains(_selectedYear)) {
-      years.add(_selectedYear!);
-      years.sort((left, right) => right.compareTo(left));
-    }
-
-    var selectedYear = _selectedYear ?? now.year;
-    int? selectedMonth = _selectedMonth;
-    var selectedMonthIndex = selectedMonth ?? 0;
-    final selectedYearIndex = years.indexOf(selectedYear);
-
-    final yearController = FixedExtentScrollController(
-      initialItem: selectedYearIndex < 0 ? 0 : selectedYearIndex,
-    );
-    final monthController = FixedExtentScrollController(
-      initialItem: selectedMonthIndex,
-    );
-
-    try {
-      final selection = await showModalBottomSheet<_RecordFilterSelection>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (sheetContext) {
-          return StatefulBuilder(
-            builder: (context, setSheetState) {
-              return Container(
-                decoration: const BoxDecoration(
-                  color: kSurface,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                ),
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  16,
-                  20,
-                  24 + MediaQuery.of(context).viewInsets.bottom,
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 44,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: kBorder,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Filter records',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Choose a year or a specific month.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        height: 220,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _PickerColumnShell(
-                                child: CupertinoPicker(
-                                  scrollController: yearController,
-                                  itemExtent: 42,
-                                  useMagnifier: true,
-                                  magnification: 1.08,
-                                  selectionOverlay:
-                                      const CupertinoPickerDefaultSelectionOverlay(),
-                                  onSelectedItemChanged: (index) {
-                                    setSheetState(() {
-                                      selectedYear = years[index];
-                                    });
-                                  },
-                                  children: years
-                                      .map(
-                                        (year) => Center(
-                                          child: Text(
-                                            '$year',
-                                            style: const TextStyle(
-                                              fontSize: 22,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: _PickerColumnShell(
-                                child: CupertinoPicker(
-                                  scrollController: monthController,
-                                  itemExtent: 42,
-                                  useMagnifier: true,
-                                  magnification: 1.08,
-                                  selectionOverlay:
-                                      const CupertinoPickerDefaultSelectionOverlay(),
-                                  onSelectedItemChanged: (index) {
-                                    setSheetState(() {
-                                      selectedMonthIndex = index;
-                                      selectedMonth = index == 0 ? null : index;
-                                    });
-                                  },
-                                  children: [
-                                    const Center(
-                                      child: Text(
-                                        'Any',
-                                        style: TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                    ..._monthNames.map(
-                                      (month) => Center(
-                                        child: Text(
-                                          month,
-                                          style: const TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () {
-                                Navigator.of(sheetContext).pop(
-                                  const _RecordFilterSelection(),
-                                );
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: kTextPrimary,
-                                side: const BorderSide(color: kBorder),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 18),
-                                minimumSize: const Size.fromHeight(52),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: const Text('Clear',
-                                  style: TextStyle(fontSize: 16)),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () {
-                                Navigator.of(sheetContext).pop(
-                                  _RecordFilterSelection(
-                                    year: selectedYear,
-                                    month: selectedMonth,
-                                  ),
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: kPrimaryBlue,
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 18),
-                                minimumSize: const Size.fromHeight(52),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: const Text('Apply',
-                                  style: TextStyle(
-                                      fontSize: 16, color: Colors.white)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      );
-
-      if (!mounted || selection == null) {
-        return;
+    for (final budget in widget.budgets) {
+      if (budget.isOverall &&
+          budget.year == now.year &&
+          budget.month == now.month) {
+        return budget;
       }
-
-      setState(() {
-        _selectedYear = selection.year;
-        _selectedMonth = selection.month;
-      });
-    } finally {
-      yearController.dispose();
-      monthController.dispose();
     }
+    return null;
+  }
+
+  double get _currentMonthExpenses {
+    final now = DateTime.now();
+    return widget.expenses
+        .where((e) =>
+            e.isExpense && e.date.year == now.year && e.date.month == now.month)
+        .fold<double>(0, (sum, e) => sum + e.amount);
   }
 
   double _sumIncome(List<Expense> list) => list
@@ -678,20 +504,81 @@ class _HomeTabState extends State<_HomeTab> {
     final incomeTotal = _sumIncome(expenses);
     final expenseTotal = _sumExpense(expenses);
     final netTotal = incomeTotal - expenseTotal;
+    final budget = _currentOverallBudget;
+    final monthSpend = _currentMonthExpenses;
 
     return _TabShell(
-      title: 'Transactions',
-      showFilter: true,
-      onFilterPressed: _openFilterSheet,
-      filterActive: _hasCustomDateFilter,
-      onClearPressed: _clearCustomDateFilter,
       child: widget.loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 120),
               children: [
-                const SizedBox(height: 10),
+                PeriodNavigatorBar(
+                  period: _period,
+                  onChanged: (period) => setState(() => _period = period),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) =>
+                        setState(() => _searchQuery = value),
+                    decoration: InputDecoration(
+                      hintText: 'Search expenses...',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _searchQuery.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear_rounded),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            ),
+                      filled: true,
+                      fillColor: AppColors.card,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: const BorderSide(color: kBorder),
+                      ),
+                    ),
+                  ),
+                ),
+                if (widget.categories.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 40,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChip(
+                            label: const Text('All'),
+                            selected: _selectedCategory == null,
+                            onSelected: (_) =>
+                                setState(() => _selectedCategory = null),
+                          ),
+                        ),
+                        ...widget.categories.map(
+                          (category) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: FilterChip(
+                              label: Text(category.name),
+                              selected: _selectedCategory == category.name,
+                              onSelected: (_) => setState(
+                                () => _selectedCategory = category.name,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
                 _SummaryStrip(
                   leftLabel: 'Income',
                   leftValue: _money(incomeTotal),
@@ -700,10 +587,17 @@ class _HomeTabState extends State<_HomeTab> {
                   rightLabel: 'Total',
                   rightValue: _money(netTotal),
                 ),
+                if (budget != null) ...[
+                  const SizedBox(height: 12),
+                  _BudgetProgressCard(
+                    spent: monthSpend,
+                    limit: budget.amount,
+                  ),
+                ],
                 const SizedBox(height: 12),
                 _SectionHeader(
-                  title: _activePeriodLabel(),
-                  action: '${expenses.length} transactions',
+                  title: 'Transactions',
+                  action: '${expenses.length} items',
                 ),
                 const SizedBox(height: 8),
                 if (expenses.isEmpty)
@@ -763,281 +657,12 @@ class _StatsTab extends StatefulWidget {
 
 class _StatsTabState extends State<_StatsTab> {
   bool _showExpense = true;
-  int? _selectedYear;
-  int? _selectedMonth;
-
-  static const List<String> _monthNames = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  List<int> get _availableYears {
-    return List<int>.generate(25, (index) => 2026 + index)
-      ..sort((left, right) => right.compareTo(left));
-  }
-
-  bool get _hasCustomDateFilter => _selectedYear != null;
+  TimePeriod _period = TimePeriod.currentMonth();
 
   List<Expense> get _filteredExpenses {
-    if (_selectedYear != null) {
-      return widget.expenses.where((expense) {
-        if (expense.date.year != _selectedYear) {
-          return false;
-        }
-        if (_selectedMonth != null && expense.date.month != _selectedMonth) {
-          return false;
-        }
-        return true;
-      }).toList();
-    }
-    return widget.expenses;
-  }
-
-  String _activePeriodLabel() {
-    if (_selectedYear != null) {
-      if (_selectedMonth != null) {
-        return '${_monthNames[_selectedMonth! - 1]} $_selectedYear';
-      }
-      return '$_selectedYear';
-    }
-    return 'All transactions';
-  }
-
-  void _clearCustomDateFilter() {
-    setState(() {
-      _selectedYear = null;
-      _selectedMonth = null;
-    });
-  }
-
-  Future<void> _openFilterSheet() async {
-    final now = DateTime.now();
-    final years = List<int>.from(_availableYears);
-    if (_selectedYear != null && !years.contains(_selectedYear)) {
-      years.add(_selectedYear!);
-      years.sort((left, right) => right.compareTo(left));
-    }
-
-    var selectedYear = _selectedYear ?? now.year;
-    int? selectedMonth = _selectedMonth;
-    var selectedMonthIndex = selectedMonth ?? 0;
-    final selectedYearIndex = years.indexOf(selectedYear);
-
-    final yearController = FixedExtentScrollController(
-      initialItem: selectedYearIndex < 0 ? 0 : selectedYearIndex,
-    );
-    final monthController = FixedExtentScrollController(
-      initialItem: selectedMonthIndex,
-    );
-
-    try {
-      final selection = await showModalBottomSheet<_RecordFilterSelection>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (sheetContext) {
-          return StatefulBuilder(
-            builder: (context, setSheetState) {
-              return Container(
-                decoration: const BoxDecoration(
-                  color: kSurface,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                ),
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  16,
-                  20,
-                  24 + MediaQuery.of(context).viewInsets.bottom,
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 44,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: kBorder,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Filter records',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Choose a year or a specific month.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        height: 220,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _PickerColumnShell(
-                                child: CupertinoPicker(
-                                  scrollController: yearController,
-                                  itemExtent: 42,
-                                  useMagnifier: true,
-                                  magnification: 1.08,
-                                  selectionOverlay:
-                                      const CupertinoPickerDefaultSelectionOverlay(),
-                                  onSelectedItemChanged: (index) {
-                                    setSheetState(() {
-                                      selectedYear = years[index];
-                                    });
-                                  },
-                                  children: years
-                                      .map(
-                                        (year) => Center(
-                                          child: Text(
-                                            '$year',
-                                            style: const TextStyle(
-                                              fontSize: 22,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: _PickerColumnShell(
-                                child: CupertinoPicker(
-                                  scrollController: monthController,
-                                  itemExtent: 42,
-                                  useMagnifier: true,
-                                  magnification: 1.08,
-                                  selectionOverlay:
-                                      const CupertinoPickerDefaultSelectionOverlay(),
-                                  onSelectedItemChanged: (index) {
-                                    setSheetState(() {
-                                      selectedMonthIndex = index;
-                                      selectedMonth = index == 0 ? null : index;
-                                    });
-                                  },
-                                  children: [
-                                    const Center(
-                                      child: Text(
-                                        'Any',
-                                        style: TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                    ..._monthNames.map(
-                                      (month) => Center(
-                                        child: Text(
-                                          month,
-                                          style: const TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () {
-                                Navigator.of(sheetContext).pop(
-                                  const _RecordFilterSelection(),
-                                );
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: kTextPrimary,
-                                side: const BorderSide(color: kBorder),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 18),
-                                minimumSize: const Size.fromHeight(52),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: const Text('Clear',
-                                  style: TextStyle(fontSize: 16)),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () {
-                                Navigator.of(sheetContext).pop(
-                                  _RecordFilterSelection(
-                                    year: selectedYear,
-                                    month: selectedMonth,
-                                  ),
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: kPrimaryBlue,
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 18),
-                                minimumSize: const Size.fromHeight(52),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: const Text('Apply',
-                                  style: TextStyle(
-                                      fontSize: 16, color: Colors.white)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      );
-
-      if (!mounted || selection == null) {
-        return;
-      }
-
-      setState(() {
-        _selectedYear = selection.year;
-        _selectedMonth = selection.month;
-      });
-    } finally {
-      yearController.dispose();
-      monthController.dispose();
-    }
+    return widget.expenses
+        .where((expense) => _period.contains(expense.date))
+        .toList();
   }
 
   List<Expense> get _selectedCategoryExpenses {
@@ -1080,17 +705,17 @@ class _StatsTabState extends State<_StatsTab> {
     final expenseTotal = _sumExpense(filteredExpenses);
 
     return _TabShell(
-      title: 'Stats',
-      showFilter: true,
-      onFilterPressed: _openFilterSheet,
-      filterActive: _hasCustomDateFilter,
-      onClearPressed: _clearCustomDateFilter,
       child: widget.loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 120),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 120),
               children: [
+                PeriodNavigatorBar(
+                  period: _period,
+                  onChanged: (period) => setState(() => _period = period),
+                ),
+                const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Row(
@@ -1100,6 +725,7 @@ class _StatsTabState extends State<_StatsTab> {
                           label: 'Income',
                           value: _money(incomeTotal),
                           active: !_showExpense,
+                          color: kIncomeTint,
                           onTap: () => setState(() => _showExpense = false),
                         ),
                       ),
@@ -1109,6 +735,7 @@ class _StatsTabState extends State<_StatsTab> {
                           label: 'Expenses',
                           value: _money(expenseTotal),
                           active: _showExpense,
+                          color: kExpenseTint,
                           onTap: () => setState(() => _showExpense = true),
                         ),
                       ),
@@ -1117,11 +744,30 @@ class _StatsTabState extends State<_StatsTab> {
                 ),
                 const SizedBox(height: 20),
                 _PieCard(categoryTotals: _selectedCategoryTotals),
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: _SectionHeader(
+                    title: 'Spending trend',
+                    action: _period.displayLabel,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: SpendingTrendChart(
+                      expenses: filteredExpenses,
+                      showExpense: _showExpense,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: _SectionHeader(
-                    title: _activePeriodLabel(),
+                    title: 'Category breakdown',
                     action: '${filteredExpenses.length} items',
                   ),
                 ),
@@ -1164,38 +810,50 @@ class _StatsModeButton extends StatelessWidget {
     required this.label,
     required this.value,
     required this.active,
+    required this.color,
     required this.onTap,
   });
 
   final String label;
   final String value;
   final bool active;
+  final Color color;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: active ? kExpenseTint.withOpacity(0.12) : kInputBackground,
-      borderRadius: BorderRadius.circular(20),
+      color: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+        side: BorderSide(
+          color: active ? color : kBorder,
+          width: active ? 2 : 1,
+        ),
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: active ? kExpenseTint : kTextSecondary,
-                        fontWeight: FontWeight.w600,
-                      )),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
               const SizedBox(height: 10),
-              Text(value,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: active ? kTextPrimary : kTextSecondary,
-                      )),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: kTextPrimary,
+                    ),
+              ),
             ],
           ),
         ),
@@ -1222,13 +880,13 @@ class _CategoryBreakdownListItem extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: kInputBackground,
-        borderRadius: BorderRadius.circular(20),
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
         boxShadow: [
           BoxShadow(
-            color: kPrimaryBlue.withOpacity(0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -1237,7 +895,7 @@ class _CategoryBreakdownListItem extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.14),
+              color: color.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
@@ -1274,7 +932,6 @@ class _AccountsTab extends StatelessWidget {
     required this.loading,
     required this.customAccounts,
     required this.cashBalance,
-    required this.bankBalance,
     required this.onAddAccount,
     required this.onEditAccount,
   });
@@ -1282,19 +939,17 @@ class _AccountsTab extends StatelessWidget {
   final bool loading;
   final List<Account> customAccounts;
   final double cashBalance;
-  final double bankBalance;
   final VoidCallback onAddAccount;
   final Future<void> Function(Account account) onEditAccount;
 
   @override
   Widget build(BuildContext context) {
     return _TabShell(
-      title: 'Accounts',
       child: loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 120),
+              padding: const EdgeInsets.only(top: 8, bottom: 120),
               children: [
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -1308,13 +963,6 @@ class _AccountsTab extends StatelessWidget {
                   amount: cashBalance,
                   icon: Icons.payments_outlined,
                   color: kCashTint,
-                ),
-                const SizedBox(height: 12),
-                _AccountBalanceCard(
-                  title: 'Bank account',
-                  amount: bankBalance,
-                  icon: Icons.account_balance_outlined,
-                  color: kBankTint,
                 ),
                 const SizedBox(height: 12),
                 if (customAccounts.isEmpty) ...[
@@ -1380,340 +1028,64 @@ class _AccountsTab extends StatelessWidget {
   }
 }
 
-class _CalculatorTab extends StatefulWidget {
-  const _CalculatorTab();
+class _BudgetProgressCard extends StatelessWidget {
+  const _BudgetProgressCard({required this.spent, required this.limit});
 
-  @override
-  State<_CalculatorTab> createState() => _CalculatorTabState();
-}
-
-class _CalculatorTabState extends State<_CalculatorTab> {
-  String _display = '0';
-  String _operation = '';
-  double _previousValue = 0;
-  bool _newNumber = true;
-
-  void _onNumberPressed(String number) {
-    setState(() {
-      if (_newNumber) {
-        _display = number;
-        _newNumber = false;
-      } else {
-        if (_display == '0') {
-          _display = number;
-        } else {
-          _display += number;
-        }
-      }
-    });
-  }
-
-  void _onDecimalPressed() {
-    setState(() {
-      if (_newNumber) {
-        _display = '0.';
-        _newNumber = false;
-      } else if (!_display.contains('.')) {
-        _display += '.';
-      }
-    });
-  }
-
-  void _onOperationPressed(String op) {
-    setState(() {
-      _previousValue = double.tryParse(_display) ?? 0;
-      _operation = op;
-      _newNumber = true;
-    });
-  }
-
-  void _onClear() {
-    setState(() {
-      _display = '0';
-      _operation = '';
-      _previousValue = 0;
-      _newNumber = true;
-    });
-  }
-
-  void _onEquals() {
-    setState(() {
-      final currentValue = double.tryParse(_display) ?? 0;
-      double result = 0;
-
-      switch (_operation) {
-        case '+':
-          result = _previousValue + currentValue;
-          break;
-        case '-':
-          result = _previousValue - currentValue;
-          break;
-        case '×':
-          result = _previousValue * currentValue;
-          break;
-        case '÷':
-          result = currentValue != 0 ? _previousValue / currentValue : 0;
-          break;
-      }
-
-      _display =
-          result.toStringAsFixed(result.truncateToDouble() == result ? 0 : 2);
-      _operation = '';
-      _newNumber = true;
-    });
-  }
+  final double spent;
+  final double limit;
 
   @override
   Widget build(BuildContext context) {
-    return _TabShell(
-      title: 'Calculator',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            decoration: BoxDecoration(
-              color: kPrimaryBlue,
-              borderRadius: BorderRadius.circular(12),
+    final progress = limit > 0 ? (spent / limit).clamp(0.0, 1.0) : 0.0;
+    final overBudget = spent > limit;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Monthly budget',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
-            child: Text(
-              _display,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontSize: 48,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 10,
+                backgroundColor: kBorder,
+                color: overBudget ? kExpenseTint : kPrimaryBlue,
               ),
             ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: GridView.count(
-                crossAxisCount: 4,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                padding: const EdgeInsets.only(bottom: 120),
-                children: [
-                  _CalculatorButton('C', Colors.red, _onClear),
-                  _CalculatorButton(
-                      '÷', kPrimaryBlue, () => _onOperationPressed('÷')),
-                  _CalculatorButton(
-                      '×', kPrimaryBlue, () => _onOperationPressed('×')),
-                  _CalculatorButton('←', kPrimaryBlue, () {
-                    setState(() {
-                      if (_display.length > 1) {
-                        _display = _display.substring(0, _display.length - 1);
-                      } else {
-                        _display = '0';
-                      }
-                    });
-                  }),
-                  _CalculatorButton(
-                      '7', Colors.grey[700]!, () => _onNumberPressed('7')),
-                  _CalculatorButton(
-                      '8', Colors.grey[700]!, () => _onNumberPressed('8')),
-                  _CalculatorButton(
-                      '9', Colors.grey[700]!, () => _onNumberPressed('9')),
-                  _CalculatorButton(
-                      '-', kPrimaryBlue, () => _onOperationPressed('-')),
-                  _CalculatorButton(
-                      '4', Colors.grey[700]!, () => _onNumberPressed('4')),
-                  _CalculatorButton(
-                      '5', Colors.grey[700]!, () => _onNumberPressed('5')),
-                  _CalculatorButton(
-                      '6', Colors.grey[700]!, () => _onNumberPressed('6')),
-                  _CalculatorButton(
-                      '+', kPrimaryBlue, () => _onOperationPressed('+')),
-                  _CalculatorButton(
-                      '1', Colors.grey[700]!, () => _onNumberPressed('1')),
-                  _CalculatorButton(
-                      '2', Colors.grey[700]!, () => _onNumberPressed('2')),
-                  _CalculatorButton(
-                      '3', Colors.grey[700]!, () => _onNumberPressed('3')),
-                  _CalculatorButton('=', Colors.green, _onEquals),
-                  _CalculatorButtonWide(
-                      '0', Colors.grey[700]!, () => _onNumberPressed('0')),
-                  _CalculatorButton('.', Colors.grey[700]!, _onDecimalPressed),
-                ],
-              ),
+            const SizedBox(height: 8),
+            Text(
+              '${_money(spent)} of ${_money(limit)} used this month',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CalculatorButton extends StatelessWidget {
-  const _CalculatorButton(this.label, this.bgColor, this.onPressed);
-
-  final String label;
-  final Color bgColor;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: bgColor,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onPressed,
-        child: Center(
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
+          ],
         ),
       ),
-    );
-  }
-}
-
-class _CalculatorButtonWide extends StatelessWidget {
-  const _CalculatorButtonWide(this.label, this.bgColor, this.onPressed);
-
-  final String label;
-  final Color bgColor;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.extent(
-      maxCrossAxisExtent: 200,
-      shrinkWrap: true,
-      children: [
-        Material(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(8),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: onPressed,
-            child: Center(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
 
 class _TabShell extends StatelessWidget {
-  const _TabShell(
-      {required this.title,
-      required this.child,
-      this.showFilter = false,
-      this.onFilterPressed,
-      this.filterActive = false,
-      this.onClearPressed});
+  const _TabShell({required this.child});
 
-  final String title;
   final Widget child;
-  final bool showFilter;
-  final VoidCallback? onFilterPressed;
-  final bool filterActive;
-  final VoidCallback? onClearPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFFDFEFF), Color(0xFFF5F7FB)],
-        ),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _CommonTopBar(
-                  title: title,
-                  showFilter: showFilter,
-                  onFilterPressed: onFilterPressed,
-                  filterActive: filterActive,
-                  onClearPressed: onClearPressed),
-              const SizedBox(height: 16),
-              Expanded(child: child),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CommonTopBar extends StatelessWidget {
-  const _CommonTopBar(
-      {required this.title,
-      this.showFilter = false,
-      this.onFilterPressed,
-      this.filterActive = false,
-      this.onClearPressed});
-
-  final String title;
-  final bool showFilter;
-  final VoidCallback? onFilterPressed;
-  final bool filterActive;
-  final VoidCallback? onClearPressed;
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       bottom: false,
-      child: Container(
-        height: 72,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          children: [
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(title, style: Theme.of(context).textTheme.titleLarge),
-            ),
-            if (showFilter)
-              Row(
-                children: [
-                  if (filterActive)
-                    TextButton(
-                      onPressed: onClearPressed,
-                      style: TextButton.styleFrom(
-                        foregroundColor: kTextPrimary,
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 6),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text('Clear'),
-                    ),
-                  IconButton(
-                    onPressed: onFilterPressed,
-                    icon: const Icon(Icons.filter_alt_rounded,
-                        color: kTextPrimary),
-                  ),
-                ],
-              )
-            else
-              const SizedBox(width: 48),
-          ],
-        ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, AppTheme.screenTopPadding, 16, 0),
+        child: child,
       ),
     );
   }
@@ -1741,8 +1113,15 @@ class _SummaryStrip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       decoration: BoxDecoration(
-        color: kInputBackground,
-        borderRadius: BorderRadius.circular(18),
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -1750,21 +1129,21 @@ class _SummaryStrip extends StatelessWidget {
             child: _SummaryChip(
               label: leftLabel,
               value: leftValue,
-              color: const Color(0xFF10B981),
+              color: kIncomeTint,
             ),
           ),
           Expanded(
             child: _SummaryChip(
               label: middleLabel,
               value: middleValue,
-              color: const Color(0xFFEF4444),
+              color: kExpenseTint,
             ),
           ),
           Expanded(
             child: _SummaryChip(
               label: rightLabel,
               value: rightValue,
-              color: kPrimaryBlueDeep,
+              color: kPrimaryBlue,
             ),
           ),
         ],
@@ -1786,19 +1165,18 @@ class _SummaryChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: kInputBackground,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-              color: kPrimaryBlue.withOpacity(0.08),
-              blurRadius: 18,
-              offset: const Offset(0, 10)),
-        ],
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: kTextSecondary,
+                ),
+          ),
           const SizedBox(height: 8),
           Text(
             value,
@@ -2056,9 +1434,7 @@ class _TransactionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final accountColor = expense.accountType == kCashAccount
         ? kCashTint
-        : expense.accountType == kBankAccount
-            ? kBankTint
-            : kPrimaryBlue;
+        : kPrimaryBlue;
     Color amountColor = expense.isIncome ? kIncomeTint : kExpenseTint;
     String formattedAmount = _formatCurrency(expense.currency, expense.amount);
 
@@ -2084,12 +1460,18 @@ class _TransactionCard extends StatelessWidget {
       ),
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
-          onEdit?.call();
+          final edit = onEdit;
+          if (edit != null) {
+            Future<void>.delayed(Duration.zero, edit);
+          }
           return false;
         }
 
         if (direction == DismissDirection.endToStart) {
-          onDelete?.call();
+          final delete = onDelete;
+          if (delete != null) {
+            Future<void>.delayed(Duration.zero, delete);
+          }
         }
         return false;
       },
@@ -2097,13 +1479,13 @@ class _TransactionCard extends StatelessWidget {
         onTap: onEdit,
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(AppTheme.cardRadius),
             boxShadow: [
               BoxShadow(
-                color: kPrimaryBlue.withOpacity(0.06),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -2136,9 +1518,7 @@ class _TransactionCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        expense.notes?.isNotEmpty == true
-                            ? expense.notes!
-                            : expense.transactionType,
+                        expense.displayTitle,
                         style: Theme.of(context)
                             .textTheme
                             .titleMedium
@@ -2422,8 +1802,15 @@ class _EmptyState extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: kInputBackground,
-        borderRadius: BorderRadius.circular(24),
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -2431,15 +1818,26 @@ class _EmptyState extends StatelessWidget {
             height: 72,
             width: 72,
             decoration: BoxDecoration(
-              color: kPrimaryBlue.withOpacity(0.12),
+              color: AppColors.pastelOrange,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 34),
+            child: Icon(icon, size: 34, color: kPrimaryBlue),
           ),
           const SizedBox(height: 12),
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: kTextPrimary,
+                ),
+          ),
           const SizedBox(height: 6),
-          Text(subtitle, textAlign: TextAlign.center),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: kTextSecondary,
+                ),
+          ),
         ],
       ),
     );
@@ -2471,37 +1869,6 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _PickerColumnShell extends StatelessWidget {
-  const _PickerColumnShell({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: kInputBackground,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: kBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: child),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecordFilterSelection {
-  const _RecordFilterSelection({this.year, this.month});
-
-  final int? year;
-  final int? month;
-}
-
 class _BottomNavBar extends StatelessWidget {
   const _BottomNavBar({
     required this.selectedIndex,
@@ -2515,43 +1882,63 @@ class _BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        height: 72,
-        decoration: BoxDecoration(
-          color: kInputBackground,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _NavItem(
-              icon: Icons.receipt_long_rounded,
-              label: 'Transactions',
-              active: selectedIndex == 0,
-              onTap: () => onTap(0),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: FrostedBar(
+        placement: FrostedBarPlacement.bottom,
+        child: SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            decoration: BoxDecoration(
+              color: (isDark ? AppColors.cardDark : AppColors.card)
+                  .withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
-            _NavItem(
-              icon: Icons.pie_chart_rounded,
-              label: 'Stats',
-              active: selectedIndex == 1,
-              onTap: () => onTap(1),
+            child: SizedBox(
+              height: 64,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                _NavItem(
+                  icon: Icons.dashboard_rounded,
+                  label: 'Dashboard',
+                  active: selectedIndex == 0,
+                  onTap: () => onTap(0),
+                ),
+                _NavItem(
+                  icon: Icons.pie_chart_rounded,
+                  label: 'Analytics',
+                  active: selectedIndex == 1,
+                  onTap: () => onTap(1),
+                ),
+                _AddNavItem(onTap: onAdd),
+                _NavItem(
+                  icon: Icons.calculate_rounded,
+                  label: 'Calculator',
+                  active: selectedIndex == 2,
+                  onTap: () => onTap(2),
+                ),
+                _NavItem(
+                  icon: Icons.settings_rounded,
+                  label: 'Settings',
+                  active: selectedIndex == 3,
+                  onTap: () => onTap(3),
+                ),
+                ],
+              ),
             ),
-            _AddNavItem(onTap: onAdd),
-            _NavItem(
-              icon: Icons.account_balance_wallet_rounded,
-              label: 'Accounts',
-              active: selectedIndex == 2,
-              onTap: () => onTap(2),
-            ),
-            _NavItem(
-              icon: Icons.calculate_rounded,
-              label: 'Calculator',
-              active: selectedIndex == 3,
-              onTap: () => onTap(3),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -2602,89 +1989,181 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? kPrimaryBlue : kTextSecondary;
-
     return Expanded(
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color),
-              const SizedBox(height: 4),
-              Text(label,
-                  style: TextStyle(
-                      color: color,
-                      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 12)),
-            ],
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 24,
+              color: active ? kPrimaryBlue : kTextSecondary,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? kPrimaryBlue : kTextSecondary,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 11,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+class _ExpenseEditorResult {
+  const _ExpenseEditorResult({
+    required this.saved,
+    this.amountText = '',
+    this.titleText = '',
+    this.categoryText = '',
+    this.noteText = '',
+    this.accountType = kCashAccount,
+    this.transactionType = kExpenseType,
+  });
+
+  final bool saved;
+  final String amountText;
+  final String titleText;
+  final String categoryText;
+  final String noteText;
+  final String accountType;
+  final String transactionType;
+}
+
 class _AddTransactionPage extends StatefulWidget {
   const _AddTransactionPage({
     this.expense,
     required this.availableAccounts,
-    required this.amountController,
-    required this.categoryController,
-    required this.noteController,
-    required this.accountType,
-    required this.transactionType,
-    required this.onAccountTypeChanged,
-    required this.onTransactionTypeChanged,
+    required this.categories,
   });
 
   final Expense? expense;
   final List<Account> availableAccounts;
-  final TextEditingController amountController;
-  final TextEditingController categoryController;
-  final TextEditingController noteController;
-  final String accountType;
-  final String transactionType;
-  final ValueChanged<String> onAccountTypeChanged;
-  final ValueChanged<String> onTransactionTypeChanged;
+  final List<ExpenseCategory> categories;
 
   @override
   State<_AddTransactionPage> createState() => _AddTransactionPageState();
 }
 
 class _AddTransactionPageState extends State<_AddTransactionPage> {
+  late final TextEditingController _amountController;
+  late final TextEditingController _titleController;
+  late final TextEditingController _categoryController;
+  late final TextEditingController _noteController;
   late String _accountType;
   late String _transactionType;
-  late FocusNode _amountFocusNode;
+  late String _selectedCategory;
 
   @override
   void initState() {
     super.initState();
-    _accountType = widget.accountType;
-    _transactionType = widget.transactionType;
-    _amountFocusNode = FocusNode();
+    final expense = widget.expense;
+    final defaultCategory = widget.categories.isNotEmpty
+        ? widget.categories.first.name
+        : 'General';
+    _amountController = TextEditingController(
+      text: expense == null ? '' : expense.amount.toStringAsFixed(2),
+    );
+    _titleController = TextEditingController(
+      text: expense?.displayTitle ?? '',
+    );
+    _categoryController = TextEditingController(
+      text: expense?.category ?? defaultCategory,
+    );
+    _noteController = TextEditingController(text: expense?.notes ?? '');
+    _accountType =
+        expense?.accountType == 'bank' ? kCashAccount : (expense?.accountType ?? kCashAccount);
+    _transactionType = expense?.transactionType ?? kExpenseType;
+    if (_transactionType == kIncomeType) {
+      final category = expense?.category;
+      _selectedCategory = category != null &&
+              kIncomeCategories.contains(category)
+          ? category
+          : kDefaultIncomeCategory;
+    } else {
+      _selectedCategory = expense?.category ?? defaultCategory;
+    }
+  }
 
-    // Auto-focus the amount field after the widget is built
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _amountFocusNode.requestFocus();
+  List<String> get _categoryOptions {
+    if (_transactionType == kIncomeType) {
+      return kIncomeCategories;
+    }
+    if (widget.categories.isEmpty) {
+      return const [];
+    }
+    return widget.categories.map((category) => category.name).toList();
+  }
+
+  Color _categoryColor(String name) {
+    if (_transactionType == kIncomeType) {
+      return kIncomeTint;
+    }
+    for (final category in widget.categories) {
+      if (category.name == name) {
+        return Color(category.colorValue);
+      }
+    }
+    return kPrimaryBlue;
+  }
+
+  void _setTransactionType(String type) {
+    setState(() {
+      _transactionType = type;
+      if (type == kIncomeType) {
+        if (!kIncomeCategories.contains(_selectedCategory)) {
+          _selectedCategory = kDefaultIncomeCategory;
+        }
+      } else if (kIncomeCategories.contains(_selectedCategory)) {
+        _selectedCategory = widget.categories.isNotEmpty
+            ? widget.categories.first.name
+            : 'General';
+      } else if (!_categoryOptions.contains(_selectedCategory) &&
+          _categoryOptions.isNotEmpty) {
+        _selectedCategory = _categoryOptions.first;
+      }
     });
   }
 
   @override
   void dispose() {
-    _amountFocusNode.dispose();
+    _amountController.dispose();
+    _titleController.dispose();
+    _categoryController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
-  void _save() {
-    widget.onAccountTypeChanged(_accountType);
-    widget.onTransactionTypeChanged(_transactionType);
-    Navigator.of(context).pop(true);
+  void _close([bool saved = false]) {
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pop(
+      saved
+          ? _ExpenseEditorResult(
+              saved: true,
+              amountText: _amountController.text.trim(),
+              titleText: _titleController.text.trim(),
+              categoryText: _selectedCategory.trim().isEmpty
+                  ? _categoryController.text.trim()
+                  : _selectedCategory.trim(),
+              noteText: _noteController.text.trim(),
+              accountType: _accountType,
+              transactionType: _transactionType,
+            )
+          : const _ExpenseEditorResult(saved: false),
+    );
   }
+
+  void _save() => _close(true);
 
   @override
   Widget build(BuildContext context) {
@@ -2695,12 +2174,6 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
         label: 'Cash',
         icon: Icons.payments_outlined,
         color: kCashTint,
-      ),
-      const _AccountChoice(
-        value: kBankAccount,
-        label: 'Bank',
-        icon: Icons.account_balance_outlined,
-        color: kBankTint,
       ),
       ...widget.availableAccounts.map(
         (account) => _AccountChoice(
@@ -2713,21 +2186,19 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
     ];
 
     return Scaffold(
-      backgroundColor: kSurface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: kInputBackground,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop(false);
-            }
-          },
+          onPressed: () => _close(false),
           icon: const Icon(Icons.close_rounded, color: kTextPrimary),
         ),
         title: Text(
-          widget.expense == null ? 'Transactions' : 'Edit transaction',
+          widget.expense == null
+              ? (_transactionType == kIncomeType ? 'Add income' : 'Add expense')
+              : (_transactionType == kIncomeType ? 'Edit income' : 'Edit expense'),
           style: const TextStyle(
             color: kTextPrimary,
             fontWeight: FontWeight.w600,
@@ -2736,17 +2207,82 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(20, 8, 20, 32 + bottomInset),
+        padding: EdgeInsets.fromLTRB(20, AppTheme.screenTopPadding, 20, 32 + bottomInset),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
+            _ModernToggleSection(
+              title: 'Transaction type',
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _CustomToggleButton(
+                      label: 'Expense',
+                      icon: Icons.remove_circle_outline,
+                      isSelected: _transactionType == kExpenseType,
+                      onTap: () => _setTransactionType(kExpenseType),
+                      color: kExpenseTint,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _CustomToggleButton(
+                      label: 'Income',
+                      icon: Icons.add_circle_outline,
+                      isSelected: _transactionType == kIncomeType,
+                      onTap: () => _setTransactionType(kIncomeType),
+                      color: kIncomeTint,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            _ModernAddFieldSection(
+              title: 'Title',
+              icon: Icons.title_rounded,
+              child: TextField(
+                controller: _titleController,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: kTextPrimary,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Coffee, groceries, salary...',
+                  hintStyle: TextStyle(
+                    color: kTextSecondary.withOpacity(0.5),
+                    fontSize: 16,
+                  ),
+                  filled: true,
+                  fillColor: kInputBackground,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: kBorder, width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: kPrimaryBlue, width: 2),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
             _ModernAddFieldSection(
               title: 'Amount',
               icon: Icons.attach_money_rounded,
               child: TextField(
-                controller: widget.amountController,
-                focusNode: _amountFocusNode,
+                controller: _amountController,
+                autofocus: true,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 style: const TextStyle(
@@ -2788,48 +2324,35 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
               ),
             ),
             const SizedBox(height: 20),
-            _ModernAddFieldSection(
+            _ModernToggleSection(
               title: 'Category',
-              icon: Icons.category_rounded,
-              child: TextField(
-                controller: widget.categoryController,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: kTextPrimary,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'General',
-                  hintStyle: TextStyle(
-                    color: kTextSecondary.withOpacity(0.5),
-                    fontSize: 16,
-                  ),
-                  filled: true,
-                  fillColor: kInputBackground,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: kBorder,
-                      width: 1,
+              child: _categoryOptions.isEmpty
+                  ? TextField(
+                      controller: _categoryController,
+                      decoration: const InputDecoration(hintText: 'General'),
+                    )
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final tileWidth = (constraints.maxWidth - 12) / 2;
+                        return Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: _categoryOptions.map((name) {
+                            return SizedBox(
+                              width: tileWidth,
+                              child: _CustomToggleButton(
+                                label: name,
+                                isSelected: _selectedCategory == name,
+                                onTap: () {
+                                  setState(() => _selectedCategory = name);
+                                },
+                                color: _categoryColor(name),
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
                     ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: kPrimaryBlue,
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
             ),
             const SizedBox(height: 20),
             _ModernToggleSection(
@@ -2864,46 +2387,11 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
               ),
             ),
             const SizedBox(height: 20),
-            _ModernToggleSection(
-              title: 'Transaction type',
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _CustomToggleButton(
-                      label: 'Expense',
-                      icon: Icons.remove_circle_outline,
-                      isSelected: _transactionType == kExpenseType,
-                      onTap: () {
-                        setState(() {
-                          _transactionType = kExpenseType;
-                        });
-                      },
-                      color: kExpenseTint,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _CustomToggleButton(
-                      label: 'Income',
-                      icon: Icons.add_circle_outline,
-                      isSelected: _transactionType == kIncomeType,
-                      onTap: () {
-                        setState(() {
-                          _transactionType = kIncomeType;
-                        });
-                      },
-                      color: kIncomeTint,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
             _ModernAddFieldSection(
               title: 'Note',
               icon: Icons.note_rounded,
               child: TextField(
-                controller: widget.noteController,
+                controller: _noteController,
                 maxLines: 4,
                 style: const TextStyle(
                   fontSize: 16,
@@ -2951,7 +2439,8 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kPrimaryBlue,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 22),
+                  minimumSize: const Size.fromHeight(58),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -3043,7 +2532,6 @@ class _AddAccountPageState extends State<_AddAccountPage> {
     }
 
     if (shouldDelete == true && widget.account != null) {
-      FocusScope.of(context).unfocus();
       _close(_AccountEditorResult.deleted(widget.account!));
     }
   }
@@ -3054,16 +2542,13 @@ class _AddAccountPageState extends State<_AddAccountPage> {
     final isEditing = widget.account != null;
 
     return Scaffold(
-      backgroundColor: kSurface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: kInputBackground,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          onPressed: () {
-            FocusScope.of(context).unfocus();
-            _close();
-          },
+          onPressed: _close,
           icon: const Icon(Icons.close_rounded, color: kTextPrimary),
         ),
         title: Text(
@@ -3076,7 +2561,7 @@ class _AddAccountPageState extends State<_AddAccountPage> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(20, 8, 20, 32 + bottomInset),
+        padding: EdgeInsets.fromLTRB(20, AppTheme.screenTopPadding, 20, 32 + bottomInset),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -3223,7 +2708,6 @@ class _AddAccountPageState extends State<_AddAccountPage> {
                     return;
                   }
 
-                  FocusScope.of(context).unfocus();
                   _close(
                     Account(
                       id: widget.account?.id,
@@ -3375,20 +2859,26 @@ class _ModernToggleSection extends StatelessWidget {
 class _CustomToggleButton extends StatelessWidget {
   const _CustomToggleButton({
     required this.label,
-    required this.icon,
+    this.icon,
     required this.isSelected,
     required this.onTap,
     required this.color,
   });
 
   final String label;
-  final IconData icon;
+  final IconData? icon;
   final bool isSelected;
   final VoidCallback onTap;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
+    final labelStyle = TextStyle(
+      fontSize: 14,
+      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+      color: isSelected ? color : kTextSecondary,
+    );
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -3410,25 +2900,20 @@ class _CustomToggleButton extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSelected ? color : kTextSecondary,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected ? color : kTextSecondary,
+        child: icon == null
+            ? Center(child: Text(label, style: labelStyle, textAlign: TextAlign.center))
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: 18,
+                    color: isSelected ? color : kTextSecondary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(label, style: labelStyle),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -3476,17 +2961,7 @@ LinkedHashMap<DateTime, List<Expense>> _groupExpensesByDate(
 }
 
 Color _chartColor(int index) {
-  const colors = [
-    Color(0xFFFF9500),
-    Color(0xFF9CA3AF),
-    Color(0xFF16A34A),
-    Color(0xFFF97316),
-    Color(0xFFEF4444),
-    Color(0xFF6B7280),
-    Color(0xFFEC4899),
-    Color(0xFF14B8A6),
-  ];
-  return colors[index % colors.length];
+  return AppColors.chartPalette[index % AppColors.chartPalette.length];
 }
 
 String _formatCurrency(String currency, double value) {

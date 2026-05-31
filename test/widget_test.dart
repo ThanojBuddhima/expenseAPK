@@ -3,12 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:expence_apk/main.dart' as app;
 
 void main() {
-  testWidgets('App loads', (tester) async {
-    await tester.pumpWidget(const app.MyApp());
-    await tester.pumpAndSettle();
+  testWidgets('Dashboard loads', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: app.ExpenseDashboardPage(onThemeChanged: (_) {}),
+      ),
+    );
+    await tester.pump();
     expect(find.byType(app.ExpenseDashboardPage), findsOneWidget);
+    expect(find.text('Dashboard'), findsWidgets);
     expect(find.byIcon(Icons.add_rounded), findsWidgets);
-    expect(find.byIcon(Icons.filter_alt_rounded), findsWidgets);
-    expect(find.text('Transactions'), findsWidgets);
   });
 }

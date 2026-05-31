@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:expence_apk/models/account.dart';
+import 'package:expence_apk/models/budget.dart';
+import 'package:expence_apk/models/category.dart';
 import 'package:expence_apk/models/expense.dart';
 import 'package:expence_apk/services/db_service.dart';
 
@@ -78,6 +80,52 @@ void main() {
     expect(accounts.first.name, 'Savings');
     expect(accounts.first.balance, 250.0);
     expect(accounts.first.colorValue, 0xFF06B6D4);
+  });
+
+  test('seeds and manages categories', () async {
+    final categories = await db.getAllCategories();
+    expect(categories, isNotEmpty);
+
+    final id = await db.insertCategory(
+      ExpenseCategory(name: 'Travel', colorValue: 0xFF3B82F6),
+    );
+    expect(id, greaterThan(0));
+
+    final updated = await db.getAllCategories();
+    expect(updated.any((c) => c.name == 'Travel'), isTrue);
+  });
+
+  test('searches expenses by query', () async {
+    await db.insertExpense(
+      Expense(
+        title: 'Morning coffee',
+        amount: 5,
+        currency: 'USD',
+        date: DateTime(2026, 5, 28),
+        category: 'Food',
+        accountType: 'cash',
+        transactionType: 'expense',
+      ),
+    );
+
+    final results = await db.searchExpenses(query: 'coffee');
+    expect(results, hasLength(1));
+    expect(results.first.displayTitle, 'Morning coffee');
+  });
+
+  test('stores monthly budgets', () async {
+    final id = await db.insertBudget(
+      Budget(
+        categoryName: '',
+        amount: 500,
+        year: 2026,
+        month: 5,
+      ),
+    );
+    expect(id, greaterThan(0));
+
+    final budget = await db.getBudgetForMonth(year: 2026, month: 5);
+    expect(budget?.amount, 500);
   });
 
   test('deletes custom accounts', () async {
