@@ -19,6 +19,7 @@ const List<Map<String, Object>> _defaultCategories = [
   {'name': 'Entertainment', 'color': 0xFFFDBA74},
   {'name': 'Health', 'color': 0xFFD9F99D},
   {'name': 'General', 'color': 0xFF94A3B8},
+  {'name': 'Other', 'color': 0xFFE2E8F0},
 ];
 
 class DBService {
@@ -61,7 +62,7 @@ class DBService {
       final path = join(dbPath, 'expenses.db');
       _db = await openDatabase(
         path,
-        version: 5,
+        version: 6,
         onCreate: (db, v) async {
           await _createSchema(db);
           await _seedDefaultCategories(db);
@@ -110,6 +111,9 @@ class DBService {
                 month INTEGER NOT NULL
               )
             ''');
+            await _seedDefaultCategories(db);
+          }
+          if (oldVersion < 6) {
             await _seedDefaultCategories(db);
           }
         },
@@ -178,6 +182,7 @@ class DBService {
 
   Future<void> _seedDefaultCategoriesIfNeeded() async {
     if (_categoriesSeeded && _memoryCategories.isNotEmpty) {
+      _ensureOtherCategoryInMemory();
       return;
     }
     if (_memoryCategories.isEmpty) {
@@ -191,8 +196,24 @@ class DBService {
           ),
         );
       }
+    } else {
+      _ensureOtherCategoryInMemory();
     }
     _categoriesSeeded = true;
+  }
+
+  void _ensureOtherCategoryInMemory() {
+    if (_memoryCategories.any((category) => category.name == 'Other')) {
+      return;
+    }
+    final nextId = _nextId(_memoryCategories.map((category) => category.id).toList());
+    _memoryCategories.add(
+      ExpenseCategory(
+        id: nextId,
+        name: 'Other',
+        colorValue: 0xFFE2E8F0,
+      ),
+    );
   }
 
   int _nextId(List<int?> ids) {

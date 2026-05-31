@@ -63,7 +63,7 @@ class AuthService {
     }
     try {
       return await _localAuth.authenticate(
-        localizedReason: 'Unlock Smart Offline Expense Manager',
+        localizedReason: 'Unlock Expensely',
         options: const AuthenticationOptions(
           biometricOnly: true,
           stickyAuth: true,

@@ -20,6 +20,7 @@ import 'services/app_preferences.dart';
 import 'services/currency_service.dart';
 import 'services/db_service.dart';
 import 'widgets/bottom_add_button.dart';
+import 'widgets/frosted_bar.dart';
 import 'widgets/outlined_choice_button.dart';
 import 'widgets/period_navigator_bar.dart';
 import 'widgets/spending_trend_chart.dart';
@@ -55,6 +56,21 @@ const List<Color> kAccountColorOptions = [
   AppColors.pastelOrange,
   AppColors.darkBanner,
 ];
+
+String _accountDisplayName(String accountType) =>
+    accountType == kCashAccount ? 'Cash' : accountType;
+
+Color _accountColorFor(String accountType, List<Account> accounts) {
+  if (accountType == kCashAccount) {
+    return kCashTint;
+  }
+  for (final account in accounts) {
+    if (account.name == accountType) {
+      return Color(account.colorValue);
+    }
+  }
+  return kCashTint;
+}
 
 enum FilterMode { day, week, month, annually }
 
@@ -102,7 +118,7 @@ class _ExpenseAppState extends State<ExpenseApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Smart Offline Expense Manager',
+      title: 'Expensely',
       scrollBehavior: const _NoScrollbarBehavior(),
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
@@ -252,7 +268,19 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
       ),
     );
 
-    if (result == null || !result.saved) {
+    if (result == null) {
+      return;
+    }
+
+    if (result.deleted) {
+      if (expense?.id != null) {
+        await _db.deleteExpense(expense!.id!);
+        await _reloadExpenses();
+      }
+      return;
+    }
+
+    if (!result.saved) {
       return;
     }
 
@@ -379,6 +407,7 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
         loading: _loading,
         expenses: _orderedExpenses,
         categories: _categories,
+        accounts: _accounts,
         budgets: _budgets,
         incomeTotal: _incomeTotal,
         expenseTotal: _expenseTotal,
@@ -429,6 +458,7 @@ class _HomeTab extends StatefulWidget {
     required this.loading,
     required this.expenses,
     required this.categories,
+    required this.accounts,
     required this.budgets,
     required this.incomeTotal,
     required this.expenseTotal,
@@ -441,6 +471,7 @@ class _HomeTab extends StatefulWidget {
   final bool loading;
   final List<Expense> expenses;
   final List<ExpenseCategory> categories;
+  final List<Account> accounts;
   final List<Budget> budgets;
   final double incomeTotal;
   final double expenseTotal;
@@ -635,6 +666,7 @@ class _HomeTabState extends State<_HomeTab> {
                               padding: const EdgeInsets.only(bottom: 8),
                               child: _TransactionCard(
                                 expense: expense,
+                                accounts: widget.accounts,
                                 onDelete: () => widget.onDelete(expense),
                                 onEdit: () => widget.onEdit(expense),
                               ),
@@ -1012,7 +1044,7 @@ class _AccountsTab extends StatelessWidget {
                           title: account.name,
                           amount: account.balance,
                           icon: Icons.account_balance_wallet_outlined,
-                          color: kPrimaryBlue,
+                          color: Color(account.colorValue),
                         ),
                       ),
                     ),
@@ -1077,13 +1109,7 @@ class _TabShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, AppTheme.screenTopPadding, 16, 0),
-        child: child,
-      ),
-    );
+    return TopFadeOverlay(child: child);
   }
 }
 
@@ -1283,10 +1309,12 @@ class _PieCard extends StatelessWidget {
         )
         .toList();
 
+    final palette = context.palette;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: context.palette.input,
+        color: palette.card,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -1353,8 +1381,9 @@ class _LegendPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: palette.input,
+        color: palette.card,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: palette.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1425,18 +1454,23 @@ class _PieChartPainter extends CustomPainter {
 }
 
 class _TransactionCard extends StatelessWidget {
-  const _TransactionCard({required this.expense, this.onDelete, this.onEdit});
+  const _TransactionCard({
+    required this.expense,
+    required this.accounts,
+    this.onDelete,
+    this.onEdit,
+  });
 
   final Expense expense;
+  final List<Account> accounts;
   final VoidCallback? onDelete;
   final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final accountColor = expense.accountType == kCashAccount
-        ? kCashTint
-        : kPrimaryBlue;
+    final accountColor = _accountColorFor(expense.accountType, accounts);
+    final accountLabel = _accountDisplayName(expense.accountType);
     Color amountColor = expense.isIncome ? kIncomeTint : kExpenseTint;
     String formattedAmount = _formatCurrency(expense.currency, expense.amount);
 
@@ -1470,9 +1504,29 @@ class _TransactionCard extends StatelessWidget {
         }
 
         if (direction == DismissDirection.endToStart) {
-          final delete = onDelete;
-          if (delete != null) {
-            Future<void>.delayed(Duration.zero, delete);
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Delete transaction?'),
+              content: Text(
+                'Remove "${expense.displayTitle}" ($formattedAmount)? '
+                'This cannot be undone.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  style: TextButton.styleFrom(foregroundColor: kExpenseTint),
+                  child: const Text('Delete'),
+                ),
+              ],
+            ),
+          );
+          if (confirmed == true) {
+            onDelete?.call();
           }
         }
         return false;
@@ -1530,7 +1584,7 @@ class _TransactionCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        expense.accountType,
+                        accountLabel,
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -1564,7 +1618,7 @@ class _TransactionCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            expense.accountType,
+                            accountLabel,
                             style: TextStyle(
                               color: accountColor,
                               fontWeight: FontWeight.w700,
@@ -2040,6 +2094,7 @@ class _NavItem extends StatelessWidget {
 class _ExpenseEditorResult {
   const _ExpenseEditorResult({
     required this.saved,
+    this.deleted = false,
     this.amountText = '',
     this.titleText = '',
     this.categoryText = '',
@@ -2048,7 +2103,18 @@ class _ExpenseEditorResult {
     this.transactionType = kExpenseType,
   });
 
+  const _ExpenseEditorResult.deleted()
+      : saved = false,
+        deleted = true,
+        amountText = '',
+        titleText = '',
+        categoryText = '',
+        noteText = '',
+        accountType = kCashAccount,
+        transactionType = kExpenseType;
+
   final bool saved;
+  final bool deleted;
   final String amountText;
   final String titleText;
   final String categoryText;
@@ -2105,9 +2171,13 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
       return kIncomeCategories;
     }
     if (widget.categories.isEmpty) {
-      return const [];
+      return const ['Other'];
     }
-    return widget.categories.map((category) => category.name).toList();
+    final names = widget.categories.map((category) => category.name).toList();
+    if (!names.contains('Other')) {
+      names.add('Other');
+    }
+    return names;
   }
 
   List<_AccountChoice> get _accountChoices => [
@@ -2198,6 +2268,42 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
       return;
     }
     _close(true);
+  }
+
+  Future<void> _confirmDelete() async {
+    final expense = widget.expense;
+    if (expense == null) {
+      return;
+    }
+
+    final formattedAmount = CurrencyService.format(expense.amount);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete transaction?'),
+        content: Text(
+          'Remove "${expense.displayTitle}" ($formattedAmount)? '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(foregroundColor: kExpenseTint),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
+    Navigator.of(context).pop(const _ExpenseEditorResult.deleted());
   }
 
   @override
@@ -2390,6 +2496,20 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
                 ),
               ),
             ),
+            if (widget.expense != null) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _confirmDelete,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: kExpenseTint,
+                    side: const BorderSide(color: kExpenseTint, width: 1.5),
+                  ),
+                  child: const Text('Delete transaction'),
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -75,45 +75,41 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.primary,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              height: 88,
-              width: 88,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: const Icon(
-                Icons.account_balance_wallet_rounded,
-                color: AppColors.primary,
-                size: 44,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Image.asset(
+                'assets/images/app_icon.png',
+                width: 120,
+                height: 120,
+                fit: BoxFit.cover,
               ),
             ),
             const SizedBox(height: 24),
             const Text(
-              'Smart Offline\nExpense Manager',
+              'Expensely',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 22,
+                color: Colors.white,
+                fontSize: 28,
                 fontWeight: FontWeight.w700,
-                height: 1.3,
+                letterSpacing: -0.5,
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'Offline-first • Private • Secure',
               style: TextStyle(
-                color: AppColors.textSecondary,
+                color: Colors.white.withValues(alpha: 0.88),
                 fontSize: 14,
               ),
             ),
             const SizedBox(height: 40),
-            const CircularProgressIndicator(color: AppColors.primary),
+            const CircularProgressIndicator(color: Colors.white),
           ],
         ),
       ),

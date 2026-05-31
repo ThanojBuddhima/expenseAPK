@@ -34,3 +34,56 @@ class FrostedBar extends StatelessWidget {
 }
 
 enum FrostedBarPlacement { top, bottom }
+
+/// Frosted fade at the top of tab screens so content scrolls beneath a soft edge.
+class TopFadeOverlay extends StatelessWidget {
+  const TopFadeOverlay({
+    super.key,
+    required this.child,
+    this.horizontalPadding = 16,
+    this.topPadding = AppTheme.screenTopPadding,
+  });
+
+  final Widget child;
+  final double horizontalPadding;
+  final double topPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top;
+    final fadeHeight = topInset + topPadding;
+    final base = Theme.of(context).scaffoldBackgroundColor;
+
+    return Stack(
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(horizontalPadding, fadeHeight, horizontalPadding, 0),
+          child: child,
+        ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: fadeHeight,
+          child: ClipRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      base.withValues(alpha: 0.9),
+                      base.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}

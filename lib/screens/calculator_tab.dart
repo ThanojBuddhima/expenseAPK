@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import '../widgets/frosted_bar.dart';
 
 const Color _kCalcOp = AppColors.primary;
 
@@ -181,10 +182,9 @@ class _CalculatorTabState extends State<CalculatorTab> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return SafeArea(
-      bottom: false,
+    return TopFadeOverlay(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, AppTheme.screenTopPadding, 16, 120),
+        padding: const EdgeInsets.only(bottom: 150),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
