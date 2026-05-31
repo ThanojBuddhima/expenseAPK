@@ -40,8 +40,7 @@ class AppPreferences {
   }
 
   Future<void> _migrateThemePreference() async {
-    final stored = _getString(_darkModeKey);
-    if (stored == null || stored == 'system') {
+    if (_getString(_darkModeKey) == null) {
       await _setString(_darkModeKey, 'light');
     }
   }
@@ -135,11 +134,11 @@ class AppPreferences {
   Future<ThemeMode> get themeMode async {
     await init();
     final value = _getString(_darkModeKey) ?? 'light';
-    if (value == 'dark') {
-      return ThemeMode.dark;
-    }
-    // Default to light (pastel UI). Treat legacy "system" as light.
-    return ThemeMode.light;
+    return switch (value) {
+      'dark' => ThemeMode.dark,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.light,
+    };
   }
 
   Future<void> setPinEnabled(bool enabled) async {

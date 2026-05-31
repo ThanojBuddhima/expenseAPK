@@ -197,17 +197,61 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
             const SizedBox(height: 16),
             _SectionTitle('Appearance'),
-            SwitchListTile(
-              title: const Text('Dark mode'),
-              subtitle: const Text(
-                'Off = light pastel theme (recommended)',
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Theme',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    SegmentedButton<ThemeMode>(
+                      segments: const [
+                        ButtonSegment(
+                          value: ThemeMode.light,
+                          label: Text('Light'),
+                          icon: Icon(Icons.light_mode_outlined),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.dark,
+                          label: Text('Dark'),
+                          icon: Icon(Icons.dark_mode_outlined),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.system,
+                          label: Text('Device'),
+                          icon: Icon(Icons.brightness_auto_outlined),
+                        ),
+                      ],
+                      selected: {_themeMode},
+                      onSelectionChanged: (selected) {
+                        final mode = selected.first;
+                        setState(() => _themeMode = mode);
+                        widget.onThemeChanged(mode);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _themeMode == ThemeMode.system
+                          ? 'Matches your device light or dark setting'
+                          : _themeMode == ThemeMode.dark
+                              ? 'Always use dark theme'
+                              : 'Always use light pastel theme',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.6),
+                          ),
+                    ),
+                  ],
+                ),
               ),
-              value: _themeMode == ThemeMode.dark,
-              onChanged: (enabled) {
-                final mode = enabled ? ThemeMode.dark : ThemeMode.light;
-                setState(() => _themeMode = mode);
-                widget.onThemeChanged(mode);
-              },
             ),
             const SizedBox(height: 12),
             _SectionTitle('Security'),
@@ -231,7 +275,15 @@ class _SettingsTabState extends State<SettingsTab> {
                 value: _biometricEnabled,
                 onChanged: _pinEnabled
                     ? (enabled) async {
-                        await AppPreferences.instance.setBiometricEnabled(enabled);
+                        if (enabled) {
+                          final ok = await AuthService.instance
+                              .authenticateWithBiometrics();
+                          if (!ok) {
+                            return;
+                          }
+                        }
+                        await AppPreferences.instance
+                            .setBiometricEnabled(enabled);
                         await _load();
                       }
                     : null,

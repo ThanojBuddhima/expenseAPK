@@ -167,8 +167,8 @@ class AppTheme {
       brightness: brightness,
       primary: AppColors.primary,
       onPrimary: Colors.white,
-      secondary: AppColors.accentLime,
-      onSecondary: AppColors.textPrimary,
+      secondary: AppColors.primaryDeep,
+      onSecondary: Colors.white,
       surface: surface,
       onSurface: onSurface,
       error: AppColors.expenseTint,
@@ -275,6 +275,16 @@ class AppTheme {
         side: BorderSide(color: isDark ? AppColors.borderDark : AppColors.border),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: SegmentedButton.styleFrom(
+          selectedBackgroundColor: scheme.primary,
+          selectedForegroundColor: scheme.onPrimary,
+          foregroundColor: onSurface,
+          side: BorderSide(
+            color: isDark ? AppColors.borderDark : AppColors.border,
+          ),
         ),
       ),
       dividerColor: isDark ? AppColors.borderDark : AppColors.border,

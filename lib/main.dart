@@ -1,5 +1,6 @@
 import 'dart:collection';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -19,7 +20,6 @@ import 'services/app_preferences.dart';
 import 'services/currency_service.dart';
 import 'services/db_service.dart';
 import 'widgets/bottom_add_button.dart';
-import 'widgets/frosted_bar.dart';
 import 'widgets/outlined_choice_button.dart';
 import 'widgets/period_navigator_bar.dart';
 import 'widgets/spending_trend_chart.dart';
@@ -408,14 +408,17 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
     return Scaffold(
       extendBody: true,
       body: IndexedStack(index: _selectedTab, children: pages),
-      bottomNavigationBar: _BottomNavBar(
-        selectedIndex: _selectedTab,
-        onAdd: _openAddTransactionSheet,
-        onTap: (index) {
-          setState(() {
-            _selectedTab = index;
-          });
-        },
+      bottomNavigationBar: Material(
+        color: Colors.transparent,
+        child: _BottomNavBar(
+          selectedIndex: _selectedTab,
+          onAdd: _openAddTransactionSheet,
+          onTap: (index) {
+            setState(() {
+              _selectedTab = index;
+            });
+          },
+        ),
       ),
     );
   }
@@ -1886,57 +1889,71 @@ class _BottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: FrostedBar(
-        placement: FrostedBarPlacement.bottom,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.only(top: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            decoration: BoxDecoration(
-              color: palette.card.withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(32),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+      child: SafeArea(
+        top: false,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.14),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  color: palette.card.withValues(alpha: isDark ? 0.78 : 0.9),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: (isDark ? Colors.white : Colors.black)
+                        .withValues(alpha: isDark ? 0.1 : 0.06),
+                  ),
                 ),
-              ],
-            ),
-            child: SizedBox(
-              height: 64,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                _NavItem(
-                  icon: Icons.dashboard_rounded,
-                  label: 'Dashboard',
-                  active: selectedIndex == 0,
-                  onTap: () => onTap(0),
+                child: SizedBox(
+                  height: 64,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _NavItem(
+                        icon: Icons.dashboard_rounded,
+                        label: 'Dashboard',
+                        active: selectedIndex == 0,
+                        onTap: () => onTap(0),
+                      ),
+                      _NavItem(
+                        icon: Icons.pie_chart_rounded,
+                        label: 'Analytics',
+                        active: selectedIndex == 1,
+                        onTap: () => onTap(1),
+                      ),
+                      _AddNavItem(onTap: onAdd),
+                      _NavItem(
+                        icon: Icons.calculate_rounded,
+                        label: 'Calculator',
+                        active: selectedIndex == 2,
+                        onTap: () => onTap(2),
+                      ),
+                      _NavItem(
+                        icon: Icons.settings_rounded,
+                        label: 'Settings',
+                        active: selectedIndex == 3,
+                        onTap: () => onTap(3),
+                      ),
+                    ],
+                  ),
                 ),
-                _NavItem(
-                  icon: Icons.pie_chart_rounded,
-                  label: 'Analytics',
-                  active: selectedIndex == 1,
-                  onTap: () => onTap(1),
-                ),
-                _AddNavItem(onTap: onAdd),
-                _NavItem(
-                  icon: Icons.calculate_rounded,
-                  label: 'Calculator',
-                  active: selectedIndex == 2,
-                  onTap: () => onTap(2),
-                ),
-                _NavItem(
-                  icon: Icons.settings_rounded,
-                  label: 'Settings',
-                  active: selectedIndex == 3,
-                  onTap: () => onTap(3),
-                ),
-                ],
               ),
             ),
           ),

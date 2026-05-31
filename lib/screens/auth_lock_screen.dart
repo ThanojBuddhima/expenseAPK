@@ -33,27 +33,36 @@ class _AuthLockScreenState extends State<AuthLockScreen> {
   @override
   void initState() {
     super.initState();
-    _checkBiometrics();
-    if (!widget.setupMode) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _tryBiometric());
-    }
+    _initBiometrics();
   }
 
-  Future<void> _checkBiometrics() async {
+  Future<void> _initBiometrics() async {
     if (!AuthService.instance.biometricsSupported) {
       return;
     }
     final enabled = await AppPreferences.instance.biometricEnabled;
     final canUse = await AuthService.instance.canUseBiometrics();
-    if (mounted) {
-      setState(() {
-        _biometricAvailable = enabled && canUse;
-      });
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _biometricAvailable = enabled && canUse;
+    });
+    if (!widget.setupMode && enabled && canUse) {
+      await _tryBiometric();
     }
   }
 
   Future<void> _tryBiometric() async {
-    if (!_biometricAvailable) {
+    if (widget.setupMode) {
+      return;
+    }
+    final enabled = await AppPreferences.instance.biometricEnabled;
+    if (!enabled) {
+      return;
+    }
+    final canUse = await AuthService.instance.canUseBiometrics();
+    if (!canUse) {
       return;
     }
     final ok = await AuthService.instance.authenticateWithBiometrics();

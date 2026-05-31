@@ -33,8 +33,14 @@ class AuthService {
       return false;
     }
     try {
-      return await _localAuth.canCheckBiometrics ||
-          await _localAuth.isDeviceSupported();
+      if (!await _localAuth.isDeviceSupported()) {
+        return false;
+      }
+      if (!await _localAuth.canCheckBiometrics) {
+        return false;
+      }
+      final enrolled = await _localAuth.getAvailableBiometrics();
+      return enrolled.isNotEmpty;
     } on Object {
       return false;
     }
