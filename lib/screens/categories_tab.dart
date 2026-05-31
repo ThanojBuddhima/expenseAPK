@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../models/category.dart';
 import '../services/db_service.dart';
+import '../widgets/bottom_add_button.dart';
 
 class _CategorySheetResult {
   const _CategorySheetResult({required this.name, required this.colorValue});
@@ -101,14 +102,12 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
             }).toList(),
           ),
           const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: _submit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _submit,
+              child: const Text('Save'),
             ),
-            child: const Text('Save'),
           ),
         ],
       ),
@@ -206,32 +205,23 @@ class _CategoriesTabState extends State<CategoriesTab> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, AppTheme.screenTopPadding, 16, 24),
+    return ManageListScaffold(
+      addLabel: 'Add category',
+      onAdd: () => _openEditor(),
+      padding: const EdgeInsets.fromLTRB(16, AppTheme.screenTopPadding, 16, 16),
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Category list',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              IconButton(
-                onPressed: () => _openEditor(),
-                icon: const Icon(Icons.add_rounded),
-              ),
-            ],
+          child: Text(
+            'Category list',
+            style: Theme.of(context).textTheme.titleMedium,
           ),
         ),
         if (_categories.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(
-              child: Text('No categories yet. Tap + to add one.'),
+              child: Text('No categories yet.'),
             ),
           )
         else

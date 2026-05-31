@@ -10,12 +10,14 @@ import 'models/category.dart';
 import 'models/expense.dart';
 import 'models/time_period.dart';
 import 'screens/auth_lock_screen.dart';
+import 'screens/budgets_tab.dart';
 import 'screens/categories_tab.dart';
 import 'screens/calculator_tab.dart';
 import 'screens/settings_tab.dart';
 import 'screens/splash_screen.dart';
 import 'services/app_preferences.dart';
 import 'services/db_service.dart';
+import 'widgets/bottom_add_button.dart';
 import 'widgets/frosted_bar.dart';
 import 'widgets/outlined_choice_button.dart';
 import 'widgets/period_navigator_bar.dart';
@@ -209,6 +211,18 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
     await _reloadDashboard();
   }
 
+  Future<void> _openBudgetsPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Budgets')),
+          body: BudgetsTab(onChanged: _reloadDashboard),
+        ),
+      ),
+    );
+    await _reloadDashboard();
+  }
+
   Future<void> _openAccountsPage() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -389,7 +403,7 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
         onThemeChanged: widget.onThemeChanged,
         onAccountsTap: _openAccountsPage,
         onCategoriesTap: _openCategoriesPage,
-        onDataChanged: _reloadDashboard,
+        onBudgetsTap: _openBudgetsPage,
       ),
     ];
 
@@ -891,9 +905,10 @@ class _AccountsTab extends StatelessWidget {
     return _TabShell(
       child: loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.only(top: 8, bottom: 120),
+          : ManageListScaffold(
+              addLabel: 'Add account',
+              onAdd: onAddAccount,
+              padding: const EdgeInsets.fromLTRB(0, 8, 0, 16),
               children: [
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -909,31 +924,14 @@ class _AccountsTab extends StatelessWidget {
                   color: kCashTint,
                 ),
                 const SizedBox(height: 12),
-                if (customAccounts.isEmpty) ...[
+                if (customAccounts.isEmpty)
                   const _EmptyState(
                     icon: Icons.account_balance_wallet_outlined,
                     title: 'No custom accounts yet',
                     subtitle:
                         'Create an account to track savings, wallet, or other balances.',
-                  ),
-                  const SizedBox(height: 20),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: ElevatedButton.icon(
-                      onPressed: onAddAccount,
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('Add account'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kPrimaryBlue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                  ),
-                ] else ...[
+                  )
+                else
                   ...customAccounts.map(
                     (account) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -948,24 +946,6 @@ class _AccountsTab extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: ElevatedButton.icon(
-                      onPressed: onAddAccount,
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('Add account'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kPrimaryBlue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
     );
@@ -2301,24 +2281,10 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kPrimaryBlue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 22),
-                  minimumSize: const Size.fromHeight(58),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                ),
                 child: Text(
                   widget.expense == null
                       ? 'Save Transaction'
                       : 'Update Transaction',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
                 ),
               ),
             ),
@@ -2529,22 +2495,7 @@ class _AddAccountPageState extends State<_AddAccountPage> {
                     ),
                   );
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kPrimaryBlue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                ),
-                child: Text(
-                  isEditing ? 'Save changes' : 'Add account',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                child: Text(isEditing ? 'Save changes' : 'Add account'),
               ),
             ),
             if (isEditing) ...[
@@ -2553,21 +2504,7 @@ class _AddAccountPageState extends State<_AddAccountPage> {
                 width: double.infinity,
                 child: OutlinedButton(
                   onPressed: _confirmDelete,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: kExpenseTint,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    side: const BorderSide(color: kExpenseTint),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Delete account',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: const Text('Delete account'),
                 ),
               ),
             ],

@@ -152,7 +152,7 @@ extension AppPaletteContext on BuildContext {
 
 class AppTheme {
   static const double cardRadius = 24;
-  static const double buttonRadius = 28;
+  static const double buttonRadius = 12;
   static const double screenTopPadding = 24;
 
   static ThemeData light = _build(Brightness.light);
@@ -202,9 +202,48 @@ class AppTheme {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          shadowColor: Colors.transparent,
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
+          minimumSize: const Size.fromHeight(58),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(buttonRadius),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.expenseTint,
+          side: const BorderSide(color: AppColors.expenseTint, width: 1.5),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
+          minimumSize: const Size.fromHeight(58),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(buttonRadius),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
+          minimumSize: const Size.fromHeight(58),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(buttonRadius),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),

@@ -1,153 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
-import '../models/budget.dart';
 import '../screens/auth_lock_screen.dart';
 import '../services/app_preferences.dart';
 import '../services/auth_service.dart';
-import '../services/db_service.dart';
-
-class _BudgetSheetResult {
-  const _BudgetSheetResult({
-    required this.categoryName,
-    required this.amount,
-    required this.year,
-    required this.month,
-  });
-
-  final String categoryName;
-  final double amount;
-  final int year;
-  final int month;
-}
-
-class _BudgetEditorSheet extends StatefulWidget {
-  const _BudgetEditorSheet({this.existing});
-
-  final Budget? existing;
-
-  @override
-  State<_BudgetEditorSheet> createState() => _BudgetEditorSheetState();
-}
-
-class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
-  late final TextEditingController _amountController;
-  late final TextEditingController _categoryController;
-  late final TextEditingController _yearController;
-  late int _month;
-
-  @override
-  void initState() {
-    super.initState();
-    final now = DateTime.now();
-    final existing = widget.existing;
-    _amountController = TextEditingController(
-      text: existing?.amount.toStringAsFixed(2) ?? '',
-    );
-    _categoryController = TextEditingController(
-      text: existing?.categoryName ?? '',
-    );
-    _yearController = TextEditingController(
-      text: '${existing?.year ?? now.year}',
-    );
-    _month = existing?.month ?? now.month;
-  }
-
-  @override
-  void dispose() {
-    _amountController.dispose();
-    _categoryController.dispose();
-    _yearController.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final amount = double.tryParse(_amountController.text.trim()) ?? 0;
-    if (amount <= 0) {
-      return;
-    }
-    Navigator.of(context).pop(
-      _BudgetSheetResult(
-        categoryName: _categoryController.text.trim(),
-        amount: amount,
-        year: int.tryParse(_yearController.text.trim()) ?? DateTime.now().year,
-        month: _month,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final existing = widget.existing;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        20,
-        20,
-        20 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            existing == null ? 'Monthly budget' : 'Edit budget',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _categoryController,
-            decoration: const InputDecoration(
-              labelText: 'Category (leave empty for overall)',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _amountController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Budget amount'),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<int>(
-                  initialValue: _month,
-                  decoration: const InputDecoration(labelText: 'Month'),
-                  items: List.generate(
-                    12,
-                    (i) => DropdownMenuItem(
-                      value: i + 1,
-                      child: Text('${i + 1}'),
-                    ),
-                  ),
-                  onChanged: (v) => setState(() => _month = v ?? _month),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _yearController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Year'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _submit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Save budget'),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({
@@ -155,13 +11,13 @@ class SettingsTab extends StatefulWidget {
     required this.onThemeChanged,
     required this.onAccountsTap,
     required this.onCategoriesTap,
-    required this.onDataChanged,
+    required this.onBudgetsTap,
   });
 
   final ValueChanged<ThemeMode> onThemeChanged;
   final VoidCallback onAccountsTap;
   final VoidCallback onCategoriesTap;
-  final VoidCallback onDataChanged;
+  final VoidCallback onBudgetsTap;
 
   @override
   State<SettingsTab> createState() => _SettingsTabState();
@@ -172,7 +28,6 @@ class _SettingsTabState extends State<SettingsTab> {
   bool _biometricEnabled = false;
   bool _biometricAvailable = false;
   ThemeMode _themeMode = ThemeMode.light;
-  List<Budget> _budgets = [];
 
   @override
   void initState() {
@@ -188,14 +43,12 @@ class _SettingsTabState extends State<SettingsTab> {
     if (!canBio && bio) {
       await AppPreferences.instance.setBiometricEnabled(false);
     }
-    final budgets = await DBService.instance.getAllBudgets();
     if (mounted) {
       setState(() {
         _pinEnabled = pin;
         _biometricEnabled = canBio && bio;
         _biometricAvailable = canBio;
         _themeMode = theme;
-        _budgets = budgets;
       });
     }
   }
@@ -210,34 +63,6 @@ class _SettingsTabState extends State<SettingsTab> {
     if (ok == true) {
       await _load();
     }
-  }
-
-  Future<void> _openBudgetEditor([Budget? existing]) async {
-    final result = await showModalBottomSheet<_BudgetSheetResult>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => _BudgetEditorSheet(existing: existing),
-    );
-
-    if (result == null) {
-      return;
-    }
-
-    final budget = Budget(
-      id: existing?.id,
-      categoryName: result.categoryName,
-      amount: result.amount,
-      year: result.year,
-      month: result.month,
-    );
-
-    if (existing == null) {
-      await DBService.instance.insertBudget(budget);
-    } else {
-      await DBService.instance.updateBudget(budget);
-    }
-    widget.onDataChanged();
-    await _load();
   }
 
   @override
@@ -304,49 +129,32 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
             const SizedBox(height: 12),
             _SectionTitle('Accounts'),
-            ListTile(
-              leading: const Icon(Icons.account_balance_wallet_outlined),
-              title: const Text('Manage accounts'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: widget.onAccountsTap,
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('Manage accounts'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: widget.onAccountsTap,
+              ),
             ),
             const SizedBox(height: 12),
             _SectionTitle('Categories'),
-            ListTile(
-              leading: const Icon(Icons.category_outlined),
-              title: const Text('Manage categories'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: widget.onCategoriesTap,
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.category_outlined),
+                title: const Text('Manage categories'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: widget.onCategoriesTap,
+              ),
             ),
             const SizedBox(height: 12),
-            _SectionTitle('Budget management'),
-            ListTile(
-              leading: const Icon(Icons.savings_outlined),
-              title: const Text('Add monthly budget'),
-              trailing: const Icon(Icons.add_rounded),
-              onTap: () => _openBudgetEditor(),
-            ),
-            ..._budgets.map(
-              (budget) => Card(
-                child: ListTile(
-                  title: Text(
-                    budget.isOverall
-                        ? 'Overall • ${budget.month}/${budget.year}'
-                        : '${budget.categoryName} • ${budget.month}/${budget.year}',
-                  ),
-                  subtitle: Text('\$${budget.amount.toStringAsFixed(2)}'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () async {
-                      if (budget.id != null) {
-                        await DBService.instance.deleteBudget(budget.id!);
-                        widget.onDataChanged();
-                        await _load();
-                      }
-                    },
-                  ),
-                  onTap: () => _openBudgetEditor(budget),
-                ),
+            _SectionTitle('Budgets'),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.savings_outlined),
+                title: const Text('Manage budgets'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: widget.onBudgetsTap,
               ),
             ),
             const SizedBox(height: 24),

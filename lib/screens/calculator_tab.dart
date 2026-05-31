@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 
-const Color _kCalcOp = AppColors.primaryDeep;
+const Color _kCalcOp = AppColors.primary;
 
 class CalculatorTab extends StatefulWidget {
   const CalculatorTab({super.key});
