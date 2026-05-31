@@ -34,6 +34,15 @@ flutter pub get
 flutter run
 ```
 
+## APK release
+
+GitHub releases are expected to include `app-release.apk` as a release asset.
+When the release workflow runs on a tagged commit, it builds the Android APK and uploads it automatically.
+
+Download URL after publishing a release:
+
+https://github.com/ThanojBuddhima/expenseAPK/releases/latest/download/app-release.apk
+
 Web: `flutter run -d chrome`
 
 ## Tests
