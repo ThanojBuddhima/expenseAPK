@@ -53,6 +53,17 @@ class AppColors {
     Color(0xFF84CC16),
   ];
 
+  /// Darkens light pastel accents for readable text and outlines.
+  static Color readableAccent(Color color) {
+    if (color.computeLuminance() <= 0.42) {
+      return color;
+    }
+    final hsl = HSLColor.fromColor(color);
+    return hsl
+        .withLightness((hsl.lightness * 0.45).clamp(0.28, 0.4))
+        .withSaturation((hsl.saturation * 0.85 + 0.18).clamp(0.35, 1.0))
+        .toColor();
+  }
 }
 
 class AppTheme {
@@ -131,8 +142,8 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: isDark ? AppColors.inputBackgroundDark : AppColors.card,
-        selectedColor: AppColors.pastelOrange,
+        backgroundColor: AppColors.card,
+        selectedColor: AppColors.card,
         labelStyle: TextStyle(color: onSurface),
         side: BorderSide(color: isDark ? AppColors.borderDark : AppColors.border),
         shape: RoundedRectangleBorder(

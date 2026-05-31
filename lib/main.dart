@@ -17,6 +17,7 @@ import 'screens/splash_screen.dart';
 import 'services/app_preferences.dart';
 import 'services/db_service.dart';
 import 'widgets/frosted_bar.dart';
+import 'widgets/outlined_choice_button.dart';
 import 'widgets/period_navigator_bar.dart';
 import 'widgets/spending_trend_chart.dart';
 
@@ -549,26 +550,31 @@ class _HomeTabState extends State<_HomeTab> {
                 if (widget.categories.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   SizedBox(
-                    height: 40,
+                    height: 44,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
-                          child: FilterChip(
-                            label: const Text('All'),
-                            selected: _selectedCategory == null,
-                            onSelected: (_) =>
+                          child: OutlinedChoiceButton(
+                            label: 'All',
+                            color: kPrimaryBlue,
+                            isSelected: _selectedCategory == null,
+                            compact: true,
+                            onTap: () =>
                                 setState(() => _selectedCategory = null),
                           ),
                         ),
                         ...widget.categories.map(
                           (category) => Padding(
                             padding: const EdgeInsets.only(right: 8),
-                            child: FilterChip(
-                              label: Text(category.name),
-                              selected: _selectedCategory == category.name,
-                              onSelected: (_) => setState(
+                            child: OutlinedChoiceButton(
+                              label: category.name,
+                              color: kTextPrimary,
+                              isSelected:
+                                  _selectedCategory == category.name,
+                              compact: true,
+                              onTap: () => setState(
                                 () => _selectedCategory = category.name,
                               ),
                             ),
@@ -721,20 +727,20 @@ class _StatsTabState extends State<_StatsTab> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: _StatsModeButton(
+                        child: OutlinedChoiceButton(
                           label: 'Income',
-                          value: _money(incomeTotal),
-                          active: !_showExpense,
+                          subtitle: _money(incomeTotal),
+                          isSelected: !_showExpense,
                           color: kIncomeTint,
                           onTap: () => setState(() => _showExpense = false),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _StatsModeButton(
+                        child: OutlinedChoiceButton(
                           label: 'Expenses',
-                          value: _money(expenseTotal),
-                          active: _showExpense,
+                          subtitle: _money(expenseTotal),
+                          isSelected: _showExpense,
                           color: kExpenseTint,
                           onTap: () => setState(() => _showExpense = true),
                         ),
@@ -801,63 +807,6 @@ class _StatsTabState extends State<_StatsTab> {
                   }),
               ],
             ),
-    );
-  }
-}
-
-class _StatsModeButton extends StatelessWidget {
-  const _StatsModeButton({
-    required this.label,
-    required this.value,
-    required this.active,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final String value;
-  final bool active;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-        side: BorderSide(
-          color: active ? color : kBorder,
-          width: active ? 2 : 1,
-        ),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: kTextPrimary,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -2060,15 +2009,12 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
   late final TextEditingController _noteController;
   late String _accountType;
   late String _transactionType;
-  late String _selectedCategory;
+  String _selectedCategory = '';
 
   @override
   void initState() {
     super.initState();
     final expense = widget.expense;
-    final defaultCategory = widget.categories.isNotEmpty
-        ? widget.categories.first.name
-        : 'General';
     _amountController = TextEditingController(
       text: expense == null ? '' : expense.amount.toStringAsFixed(2),
     );
@@ -2076,21 +2022,13 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
       text: expense?.displayTitle ?? '',
     );
     _categoryController = TextEditingController(
-      text: expense?.category ?? defaultCategory,
+      text: expense?.category ?? '',
     );
     _noteController = TextEditingController(text: expense?.notes ?? '');
     _accountType =
         expense?.accountType == 'bank' ? kCashAccount : (expense?.accountType ?? kCashAccount);
     _transactionType = expense?.transactionType ?? kExpenseType;
-    if (_transactionType == kIncomeType) {
-      final category = expense?.category;
-      _selectedCategory = category != null &&
-              kIncomeCategories.contains(category)
-          ? category
-          : kDefaultIncomeCategory;
-    } else {
-      _selectedCategory = expense?.category ?? defaultCategory;
-    }
+    _selectedCategory = expense?.category ?? '';
   }
 
   List<String> get _categoryOptions {
@@ -2103,32 +2041,19 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
     return widget.categories.map((category) => category.name).toList();
   }
 
-  Color _categoryColor(String name) {
-    if (_transactionType == kIncomeType) {
-      return kIncomeTint;
-    }
-    for (final category in widget.categories) {
-      if (category.name == name) {
-        return Color(category.colorValue);
-      }
-    }
-    return kPrimaryBlue;
-  }
-
   void _setTransactionType(String type) {
     setState(() {
       _transactionType = type;
-      if (type == kIncomeType) {
+      if (widget.expense == null) {
+        _selectedCategory = '';
+      } else if (type == kIncomeType) {
         if (!kIncomeCategories.contains(_selectedCategory)) {
-          _selectedCategory = kDefaultIncomeCategory;
+          _selectedCategory = '';
         }
       } else if (kIncomeCategories.contains(_selectedCategory)) {
-        _selectedCategory = widget.categories.isNotEmpty
-            ? widget.categories.first.name
-            : 'General';
-      } else if (!_categoryOptions.contains(_selectedCategory) &&
-          _categoryOptions.isNotEmpty) {
-        _selectedCategory = _categoryOptions.first;
+        _selectedCategory = '';
+      } else if (!_categoryOptions.contains(_selectedCategory)) {
+        _selectedCategory = '';
       }
     });
   }
@@ -2163,7 +2088,15 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
     );
   }
 
-  void _save() => _close(true);
+  void _save() {
+    if (_categoryOptions.isNotEmpty && _selectedCategory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a category')),
+      );
+      return;
+    }
+    _close(true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2217,7 +2150,7 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
               child: Row(
                 children: [
                   Expanded(
-                    child: _CustomToggleButton(
+                    child: OutlinedChoiceButton(
                       label: 'Expense',
                       icon: Icons.remove_circle_outline,
                       isSelected: _transactionType == kExpenseType,
@@ -2227,7 +2160,7 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _CustomToggleButton(
+                    child: OutlinedChoiceButton(
                       label: 'Income',
                       icon: Icons.add_circle_outline,
                       isSelected: _transactionType == kIncomeType,
@@ -2340,13 +2273,13 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
                           children: _categoryOptions.map((name) {
                             return SizedBox(
                               width: tileWidth,
-                              child: _CustomToggleButton(
+                              child: OutlinedChoiceButton(
                                 label: name,
                                 isSelected: _selectedCategory == name,
                                 onTap: () {
                                   setState(() => _selectedCategory = name);
                                 },
-                                color: _categoryColor(name),
+                                color: kTextPrimary,
                               ),
                             );
                           }).toList(),
@@ -2368,7 +2301,7 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
                         .map(
                           (account) => SizedBox(
                             width: tileWidth,
-                            child: _CustomToggleButton(
+                            child: OutlinedChoiceButton(
                               label: account.label,
                               icon: account.icon,
                               isSelected: _accountType == account.value,
@@ -2629,13 +2562,14 @@ class _AddAccountPageState extends State<_AddAccountPage> {
                           height: 42,
                           width: 42,
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.16),
+                            color: AppColors.card,
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: _selectedColorValue == color.value
                                   ? color
-                                  : color.withOpacity(0.28),
-                              width: _selectedColorValue == color.value ? 3 : 1,
+                                  : AppColors.border,
+                              width:
+                                  _selectedColorValue == color.value ? 2 : 1,
                             ),
                           ),
                           child: Icon(
@@ -2852,69 +2786,6 @@ class _ModernToggleSection extends StatelessWidget {
         const SizedBox(height: 12),
         child,
       ],
-    );
-  }
-}
-
-class _CustomToggleButton extends StatelessWidget {
-  const _CustomToggleButton({
-    required this.label,
-    this.icon,
-    required this.isSelected,
-    required this.onTap,
-    required this.color,
-  });
-
-  final String label;
-  final IconData? icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final labelStyle = TextStyle(
-      fontSize: 14,
-      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-      color: isSelected ? color : kTextSecondary,
-    );
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : kInputBackground,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? color : kBorder,
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: icon == null
-            ? Center(child: Text(label, style: labelStyle, textAlign: TextAlign.center))
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    icon,
-                    size: 18,
-                    color: isSelected ? color : kTextSecondary,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(label, style: labelStyle),
-                ],
-              ),
-      ),
     );
   }
 }

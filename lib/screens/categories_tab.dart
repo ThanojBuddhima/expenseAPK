@@ -81,12 +81,20 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
               final selected = _selectedColor == colorValue;
               return GestureDetector(
                 onTap: () => setState(() => _selectedColor = colorValue),
-                child: CircleAvatar(
-                  radius: 20,
-                  backgroundColor: color,
-                  child: selected
-                      ? const Icon(Icons.check, color: Colors.white, size: 18)
-                      : null,
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected ? color : AppColors.border,
+                      width: selected ? 2 : 1,
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(Icons.circle, size: 20, color: color),
+                  ),
                 ),
               );
             }).toList(),
