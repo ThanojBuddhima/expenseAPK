@@ -351,17 +351,11 @@ build/app/outputs/flutter-apk/app-release.apk
 
 ### JDK 17 (if Android build fails)
 
-If Gradle fails with a Java version error, point Gradle to JDK 17 in `android/gradle.properties`:
+Use JDK 17 for Android builds.
 
-```properties
-org.gradle.java.home=/path/to/jdk-17
-```
-
-Example (macOS with Temurin):
-
-```properties
-org.gradle.java.home=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home
-```
+- In CI, the release workflow already sets Java 17 via `actions/setup-java@v4`.
+- On local machines, configure your shell/IDE to use JDK 17.
+- Avoid hardcoding `org.gradle.java.home` with machine-specific paths in project files.
 
 ---
 
@@ -479,7 +473,7 @@ Each category has an assigned pastel color used in charts and chips.
 |-------|----------|
 | **Biometrics not working** | Enable PIN first, then biometric unlock in Settings. Test on a real device — biometrics are not available on web. Ensure fingerprint/Face ID is enrolled on the device. |
 | **Biometric toggle won't stay on** | You must complete a successful biometric prompt when enabling the toggle. |
-| **Android build Java error** | Use JDK 17; set `org.gradle.java.home` in `android/gradle.properties`. |
+| **Android build Java error** | Use JDK 17 (local shell/IDE) and keep project files free of machine-specific `org.gradle.java.home` paths. |
 | **Web data disappears** | Expected — web uses in-memory storage. Use Android/iOS for persistent data. |
 | **APK install blocked** | Allow "Install from unknown sources" or sideload via `adb install app-release.apk`. |
 | **Hot reload after native changes** | PIN/biometric and Android manifest changes require a **full restart** (`R` in terminal or stop & re-run). |
