@@ -337,7 +337,7 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
         onAddAccount: _openAddAccountSheet,
         onEditAccount: _openEditAccountSheet,
       ),
-      const _SettingsTab(),
+      const _CalculatorTab(),
     ];
 
     return Scaffold(
@@ -454,7 +454,7 @@ class _HomeTabState extends State<_HomeTab> {
 
     var selectedYear = _selectedYear ?? now.year;
     int? selectedMonth = _selectedMonth;
-    var selectedMonthIndex = selectedMonth ?? now.month;
+    var selectedMonthIndex = selectedMonth ?? 0;
     final selectedYearIndex = years.indexOf(selectedYear);
 
     final yearController = FixedExtentScrollController(
@@ -740,7 +740,7 @@ class _HomeTabState extends State<_HomeTab> {
   }
 }
 
-class _StatsTab extends StatelessWidget {
+class _StatsTab extends StatefulWidget {
   const _StatsTab({
     required this.loading,
     required this.expenses,
@@ -758,58 +758,513 @@ class _StatsTab extends StatelessWidget {
   final Map<String, double> categoryTotals;
 
   @override
+  State<_StatsTab> createState() => _StatsTabState();
+}
+
+class _StatsTabState extends State<_StatsTab> {
+  bool _showExpense = true;
+  int? _selectedYear;
+  int? _selectedMonth;
+
+  static const List<String> _monthNames = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  List<int> get _availableYears {
+    return List<int>.generate(25, (index) => 2026 + index)
+      ..sort((left, right) => right.compareTo(left));
+  }
+
+  bool get _hasCustomDateFilter => _selectedYear != null;
+
+  List<Expense> get _filteredExpenses {
+    if (_selectedYear != null) {
+      return widget.expenses.where((expense) {
+        if (expense.date.year != _selectedYear) {
+          return false;
+        }
+        if (_selectedMonth != null && expense.date.month != _selectedMonth) {
+          return false;
+        }
+        return true;
+      }).toList();
+    }
+    return widget.expenses;
+  }
+
+  String _activePeriodLabel() {
+    if (_selectedYear != null) {
+      if (_selectedMonth != null) {
+        return '${_monthNames[_selectedMonth! - 1]} $_selectedYear';
+      }
+      return '$_selectedYear';
+    }
+    return 'All transactions';
+  }
+
+  void _clearCustomDateFilter() {
+    setState(() {
+      _selectedYear = null;
+      _selectedMonth = null;
+    });
+  }
+
+  Future<void> _openFilterSheet() async {
+    final now = DateTime.now();
+    final years = List<int>.from(_availableYears);
+    if (_selectedYear != null && !years.contains(_selectedYear)) {
+      years.add(_selectedYear!);
+      years.sort((left, right) => right.compareTo(left));
+    }
+
+    var selectedYear = _selectedYear ?? now.year;
+    int? selectedMonth = _selectedMonth;
+    var selectedMonthIndex = selectedMonth ?? 0;
+    final selectedYearIndex = years.indexOf(selectedYear);
+
+    final yearController = FixedExtentScrollController(
+      initialItem: selectedYearIndex < 0 ? 0 : selectedYearIndex,
+    );
+    final monthController = FixedExtentScrollController(
+      initialItem: selectedMonthIndex,
+    );
+
+    try {
+      final selection = await showModalBottomSheet<_RecordFilterSelection>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (context, setSheetState) {
+              return Container(
+                decoration: const BoxDecoration(
+                  color: kSurface,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  16,
+                  20,
+                  24 + MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: kBorder,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Filter records',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Choose a year or a specific month.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        height: 220,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _PickerColumnShell(
+                                child: CupertinoPicker(
+                                  scrollController: yearController,
+                                  itemExtent: 42,
+                                  useMagnifier: true,
+                                  magnification: 1.08,
+                                  selectionOverlay:
+                                      const CupertinoPickerDefaultSelectionOverlay(),
+                                  onSelectedItemChanged: (index) {
+                                    setSheetState(() {
+                                      selectedYear = years[index];
+                                    });
+                                  },
+                                  children: years
+                                      .map(
+                                        (year) => Center(
+                                          child: Text(
+                                            '$year',
+                                            style: const TextStyle(
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: _PickerColumnShell(
+                                child: CupertinoPicker(
+                                  scrollController: monthController,
+                                  itemExtent: 42,
+                                  useMagnifier: true,
+                                  magnification: 1.08,
+                                  selectionOverlay:
+                                      const CupertinoPickerDefaultSelectionOverlay(),
+                                  onSelectedItemChanged: (index) {
+                                    setSheetState(() {
+                                      selectedMonthIndex = index;
+                                      selectedMonth = index == 0 ? null : index;
+                                    });
+                                  },
+                                  children: [
+                                    const Center(
+                                      child: Text(
+                                        'Any',
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    ..._monthNames.map(
+                                      (month) => Center(
+                                        child: Text(
+                                          month,
+                                          style: const TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                Navigator.of(sheetContext).pop(
+                                  const _RecordFilterSelection(),
+                                );
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: kTextPrimary,
+                                side: const BorderSide(color: kBorder),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 18),
+                                minimumSize: const Size.fromHeight(52),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text('Clear',
+                                  style: TextStyle(fontSize: 16)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(sheetContext).pop(
+                                  _RecordFilterSelection(
+                                    year: selectedYear,
+                                    month: selectedMonth,
+                                  ),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kPrimaryBlue,
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 18),
+                                minimumSize: const Size.fromHeight(52),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: const Text('Apply',
+                                  style: TextStyle(
+                                      fontSize: 16, color: Colors.white)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+
+      if (!mounted || selection == null) {
+        return;
+      }
+
+      setState(() {
+        _selectedYear = selection.year;
+        _selectedMonth = selection.month;
+      });
+    } finally {
+      yearController.dispose();
+      monthController.dispose();
+    }
+  }
+
+  List<Expense> get _selectedCategoryExpenses {
+    return _filteredExpenses.where((expense) {
+      return (_showExpense && expense.isExpense) ||
+          (!_showExpense && expense.isIncome);
+    }).toList();
+  }
+
+  Map<String, double> get _selectedCategoryTotals {
+    final totals = <String, double>{};
+    for (final expense in _selectedCategoryExpenses) {
+      totals[expense.category] =
+          (totals[expense.category] ?? 0) + expense.amount;
+    }
+    return totals;
+  }
+
+  List<MapEntry<String, double>> get _sortedCategoryEntries {
+    final entries = _selectedCategoryTotals.entries.toList();
+    entries.sort((left, right) => right.value.compareTo(left.value));
+    return entries;
+  }
+
+  double get _selectedTotal =>
+      _selectedCategoryTotals.values.fold(0, (sum, value) => sum + value);
+
+  double _sumIncome(List<Expense> list) => list
+      .where((expense) => expense.isIncome)
+      .fold<double>(0, (sum, expense) => sum + expense.amount);
+
+  double _sumExpense(List<Expense> list) => list
+      .where((expense) => expense.isExpense)
+      .fold<double>(0, (sum, expense) => sum + expense.amount);
+
+  @override
   Widget build(BuildContext context) {
+    final filteredExpenses = _filteredExpenses;
+    final incomeTotal = _sumIncome(filteredExpenses);
+    final expenseTotal = _sumExpense(filteredExpenses);
+
     return _TabShell(
       title: 'Stats',
       showFilter: true,
-      child: loading
+      onFilterPressed: _openFilterSheet,
+      filterActive: _hasCustomDateFilter,
+      onClearPressed: _clearCustomDateFilter,
+      child: widget.loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.only(bottom: 120),
               children: [
-                _SummaryGrid(
-                  items: [
-                    _MiniMetric(
-                        label: 'Income',
-                        value: _money(incomeTotal),
-                        color: kIncomeTint),
-                    _MiniMetric(
-                        label: 'Expense',
-                        value: _money(expenseTotal),
-                        color: kExpenseTint),
-                    _MiniMetric(
-                        label: 'Net',
-                        value: _money(netTotal),
-                        color: kPrimaryBlueDeep),
-                    _MiniMetric(
-                        label: 'Entries',
-                        value: '${expenses.length}',
-                        color: kCashTint),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _PieCard(categoryTotals: categoryTotals),
-                const SizedBox(height: 16),
-                _SectionHeader(
-                    title: 'History', action: '${expenses.length} total'),
-                const SizedBox(height: 10),
-                if (expenses.isEmpty)
-                  const _EmptyState(
-                    icon: Icons.pie_chart_outline,
-                    title: 'No history yet',
-                    subtitle:
-                        'Add a few transactions and the chart will appear here.',
-                  )
-                else
-                  ...expenses.take(10).map(
-                        (expense) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _TransactionCard(expense: expense),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _StatsModeButton(
+                          label: 'Income',
+                          value: _money(incomeTotal),
+                          active: !_showExpense,
+                          onTap: () => setState(() => _showExpense = false),
                         ),
                       ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatsModeButton(
+                          label: 'Expenses',
+                          value: _money(expenseTotal),
+                          active: _showExpense,
+                          onTap: () => setState(() => _showExpense = true),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _PieCard(categoryTotals: _selectedCategoryTotals),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: _SectionHeader(
+                    title: _activePeriodLabel(),
+                    action: '${filteredExpenses.length} items',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (_sortedCategoryEntries.isEmpty)
+                  const _EmptyState(
+                    icon: Icons.pie_chart_outline,
+                    title: 'No data yet',
+                    subtitle: 'Add transactions to see category breakdowns.',
+                  )
+                else
+                  ..._sortedCategoryEntries.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final category = entry.value.key;
+                    final amount = entry.value.value;
+                    final percent = _selectedTotal > 0
+                        ? amount / _selectedTotal * 100
+                        : 0.0;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 6),
+                      child: _CategoryBreakdownListItem(
+                        category: category,
+                        amount: _money(amount),
+                        percent: percent,
+                        color: index == 5
+                            ? const Color(0xFF64748B)
+                            : _chartColor(index),
+                      ),
+                    );
+                  }),
               ],
             ),
+    );
+  }
+}
+
+class _StatsModeButton extends StatelessWidget {
+  const _StatsModeButton({
+    required this.label,
+    required this.value,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: active ? kExpenseTint.withOpacity(0.12) : kInputBackground,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: active ? kExpenseTint : kTextSecondary,
+                        fontWeight: FontWeight.w600,
+                      )),
+              const SizedBox(height: 10),
+              Text(value,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: active ? kTextPrimary : kTextSecondary,
+                      )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryBreakdownListItem extends StatelessWidget {
+  const _CategoryBreakdownListItem({
+    required this.category,
+    required this.amount,
+    required this.percent,
+    required this.color,
+  });
+
+  final String category;
+  final String amount;
+  final double percent;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: kInputBackground,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: kPrimaryBlue.withOpacity(0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '${percent.toStringAsFixed(0)}%',
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              category,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          Text(amount,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+        ],
+      ),
     );
   }
 }
@@ -841,22 +1296,13 @@ class _AccountsTab extends StatelessWidget {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.only(bottom: 120),
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Account list',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: onAddAccount,
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Add account'),
-                    ),
-                  ],
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Account list',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
-                const SizedBox(height: 12),
                 _AccountBalanceCard(
                   title: 'Cash account',
                   amount: cashBalance,
@@ -871,14 +1317,31 @@ class _AccountsTab extends StatelessWidget {
                   color: kBankTint,
                 ),
                 const SizedBox(height: 12),
-                if (customAccounts.isEmpty)
+                if (customAccounts.isEmpty) ...[
                   const _EmptyState(
                     icon: Icons.account_balance_wallet_outlined,
                     title: 'No custom accounts yet',
                     subtitle:
-                        'Tap Add account to create savings, wallet, or other balances.',
-                  )
-                else
+                        'Create an account to track savings, wallet, or other balances.',
+                  ),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: ElevatedButton.icon(
+                      onPressed: onAddAccount,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Add account'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kPrimaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else ...[
                   ...customAccounts.map(
                     (account) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -893,32 +1356,258 @@ class _AccountsTab extends StatelessWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: ElevatedButton.icon(
+                      onPressed: onAddAccount,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Add account'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kPrimaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
     );
   }
 }
 
-class _SettingsTab extends StatelessWidget {
-  const _SettingsTab();
+class _CalculatorTab extends StatefulWidget {
+  const _CalculatorTab();
+
+  @override
+  State<_CalculatorTab> createState() => _CalculatorTabState();
+}
+
+class _CalculatorTabState extends State<_CalculatorTab> {
+  String _display = '0';
+  String _operation = '';
+  double _previousValue = 0;
+  bool _newNumber = true;
+
+  void _onNumberPressed(String number) {
+    setState(() {
+      if (_newNumber) {
+        _display = number;
+        _newNumber = false;
+      } else {
+        if (_display == '0') {
+          _display = number;
+        } else {
+          _display += number;
+        }
+      }
+    });
+  }
+
+  void _onDecimalPressed() {
+    setState(() {
+      if (_newNumber) {
+        _display = '0.';
+        _newNumber = false;
+      } else if (!_display.contains('.')) {
+        _display += '.';
+      }
+    });
+  }
+
+  void _onOperationPressed(String op) {
+    setState(() {
+      _previousValue = double.tryParse(_display) ?? 0;
+      _operation = op;
+      _newNumber = true;
+    });
+  }
+
+  void _onClear() {
+    setState(() {
+      _display = '0';
+      _operation = '';
+      _previousValue = 0;
+      _newNumber = true;
+    });
+  }
+
+  void _onEquals() {
+    setState(() {
+      final currentValue = double.tryParse(_display) ?? 0;
+      double result = 0;
+
+      switch (_operation) {
+        case '+':
+          result = _previousValue + currentValue;
+          break;
+        case '-':
+          result = _previousValue - currentValue;
+          break;
+        case '×':
+          result = _previousValue * currentValue;
+          break;
+        case '÷':
+          result = currentValue != 0 ? _previousValue / currentValue : 0;
+          break;
+      }
+
+      _display =
+          result.toStringAsFixed(result.truncateToDouble() == result ? 0 : 2);
+      _operation = '';
+      _newNumber = true;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return _TabShell(
-      title: 'Settings',
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 120),
-        children: const [
-          _SettingTile(title: 'Profile', subtitle: 'Demo user'),
-          SizedBox(height: 12),
-          _SettingTile(title: 'Theme', subtitle: 'Light mode'),
-          SizedBox(height: 12),
-          _SettingTile(title: 'Backup', subtitle: 'Local only demo'),
-          SizedBox(height: 12),
-          _SettingTile(title: 'Notifications', subtitle: 'Enabled'),
+      title: 'Calculator',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: kPrimaryBlue,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _display,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 48,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GridView.count(
+                crossAxisCount: 4,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                padding: const EdgeInsets.only(bottom: 120),
+                children: [
+                  _CalculatorButton('C', Colors.red, _onClear),
+                  _CalculatorButton(
+                      '÷', kPrimaryBlue, () => _onOperationPressed('÷')),
+                  _CalculatorButton(
+                      '×', kPrimaryBlue, () => _onOperationPressed('×')),
+                  _CalculatorButton('←', kPrimaryBlue, () {
+                    setState(() {
+                      if (_display.length > 1) {
+                        _display = _display.substring(0, _display.length - 1);
+                      } else {
+                        _display = '0';
+                      }
+                    });
+                  }),
+                  _CalculatorButton(
+                      '7', Colors.grey[700]!, () => _onNumberPressed('7')),
+                  _CalculatorButton(
+                      '8', Colors.grey[700]!, () => _onNumberPressed('8')),
+                  _CalculatorButton(
+                      '9', Colors.grey[700]!, () => _onNumberPressed('9')),
+                  _CalculatorButton(
+                      '-', kPrimaryBlue, () => _onOperationPressed('-')),
+                  _CalculatorButton(
+                      '4', Colors.grey[700]!, () => _onNumberPressed('4')),
+                  _CalculatorButton(
+                      '5', Colors.grey[700]!, () => _onNumberPressed('5')),
+                  _CalculatorButton(
+                      '6', Colors.grey[700]!, () => _onNumberPressed('6')),
+                  _CalculatorButton(
+                      '+', kPrimaryBlue, () => _onOperationPressed('+')),
+                  _CalculatorButton(
+                      '1', Colors.grey[700]!, () => _onNumberPressed('1')),
+                  _CalculatorButton(
+                      '2', Colors.grey[700]!, () => _onNumberPressed('2')),
+                  _CalculatorButton(
+                      '3', Colors.grey[700]!, () => _onNumberPressed('3')),
+                  _CalculatorButton('=', Colors.green, _onEquals),
+                  _CalculatorButtonWide(
+                      '0', Colors.grey[700]!, () => _onNumberPressed('0')),
+                  _CalculatorButton('.', Colors.grey[700]!, _onDecimalPressed),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _CalculatorButton extends StatelessWidget {
+  const _CalculatorButton(this.label, this.bgColor, this.onPressed);
+
+  final String label;
+  final Color bgColor;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: bgColor,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onPressed,
+        child: Center(
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CalculatorButtonWide extends StatelessWidget {
+  const _CalculatorButtonWide(this.label, this.bgColor, this.onPressed);
+
+  final String label;
+  final Color bgColor;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.extent(
+      maxCrossAxisExtent: 200,
+      shrinkWrap: true,
+      children: [
+        Material(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: onPressed,
+            child: Center(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1857,8 +2546,8 @@ class _BottomNavBar extends StatelessWidget {
               onTap: () => onTap(2),
             ),
             _NavItem(
-              icon: Icons.settings_rounded,
-              label: 'Settings',
+              icon: Icons.calculate_rounded,
+              label: 'Calculator',
               active: selectedIndex == 3,
               onTap: () => onTap(3),
             ),
@@ -1980,6 +2669,7 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
 
     // Auto-focus the amount field after the widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       _amountFocusNode.requestFocus();
     });
   }
@@ -2030,10 +2720,9 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
         scrolledUnderElevation: 0,
         leading: IconButton(
           onPressed: () {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (Navigator.of(context).canPop())
-                Navigator.of(context).pop(false);
-            });
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop(false);
+            }
           },
           icon: const Icon(Icons.close_rounded, color: kTextPrimary),
         ),
@@ -2318,11 +3007,9 @@ class _AddAccountPageState extends State<_AddAccountPage> {
   }
 
   void _close([Object? result]) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop(result);
-      }
-    });
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(result);
+    }
   }
 
   Future<void> _confirmDelete() async {
@@ -2350,6 +3037,10 @@ class _AddAccountPageState extends State<_AddAccountPage> {
         );
       },
     );
+
+    if (!mounted) {
+      return;
+    }
 
     if (shouldDelete == true && widget.account != null) {
       FocusScope.of(context).unfocus();
