@@ -17,10 +17,13 @@ import 'screens/calculator_tab.dart';
 import 'screens/settings_tab.dart';
 import 'screens/splash_screen.dart';
 import 'services/app_preferences.dart';
+import 'services/auth_service.dart';
 import 'services/currency_service.dart';
 import 'services/db_service.dart';
+import 'services/account_balance.dart';
 import 'widgets/bottom_add_button.dart';
 import 'widgets/frosted_bar.dart';
+import 'widgets/app_update_dialog.dart';
 import 'widgets/outlined_choice_button.dart';
 import 'widgets/period_navigator_bar.dart';
 import 'widgets/spending_trend_chart.dart';
@@ -93,13 +96,44 @@ class ExpenseApp extends StatefulWidget {
   State<ExpenseApp> createState() => _ExpenseAppState();
 }
 
-class _ExpenseAppState extends State<ExpenseApp> {
+class _ExpenseAppState extends State<ExpenseApp> with WidgetsBindingObserver {
   ThemeMode _themeMode = ThemeMode.light;
+  bool _showLockOverlay = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadTheme();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _lockSessionIfNeeded();
+    } else if (state == AppLifecycleState.resumed) {
+      _showLockIfNeeded();
+    }
+  }
+
+  Future<void> _lockSessionIfNeeded() async {
+    if (await AuthService.instance.shouldLockOnBackground()) {
+      AuthService.instance.lockSession();
+    }
+  }
+
+  Future<void> _showLockIfNeeded() async {
+    if (!AuthService.instance.isSessionLocked || !mounted) {
+      return;
+    }
+    setState(() => _showLockOverlay = true);
   }
 
   Future<void> _loadTheme() async {
@@ -123,6 +157,21 @@ class _ExpenseAppState extends State<ExpenseApp> {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: _themeMode,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            if (child != null) child,
+            if (_showLockOverlay)
+              Positioned.fill(
+                child: AuthLockScreen(
+                  onUnlocked: () {
+                    setState(() => _showLockOverlay = false);
+                  },
+                ),
+              ),
+          ],
+        );
+      },
       home: SplashScreen(
         buildDashboard: () => ExpenseDashboardPage(
           onThemeChanged: setThemeMode,
@@ -165,6 +214,16 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
   void initState() {
     super.initState();
     _reloadDashboard();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForUpdatesSilently();
+    });
+  }
+
+  Future<void> _checkForUpdatesSilently() async {
+    if (!mounted) {
+      return;
+    }
+    await checkAndPromptForUpdate(context, silentIfLatest: true);
   }
 
   Future<void> _reloadDashboard() async {
@@ -934,7 +993,7 @@ class _AccountsManagePage extends StatefulWidget {
 class _AccountsManagePageState extends State<_AccountsManagePage> {
   bool _loading = true;
   List<Account> _accounts = [];
-  double _cashBalance = 0;
+  Map<String, double> _accountBalances = {};
 
   @override
   void initState() {
@@ -949,15 +1008,16 @@ class _AccountsManagePageState extends State<_AccountsManagePage> {
       db.getAllAccounts(),
       db.getAllExpenses(),
     ]);
+    final accounts = results[0] as List<Account>;
     final expenses = results[1] as List<Expense>;
-    final cashBalance = expenses.fold<double>(0, (sum, expense) {
-      final signed = expense.isIncome ? expense.amount : -expense.amount;
-      return expense.accountType == kCashAccount ? sum + signed : sum;
-    });
+    final balances = balancesForAllAccounts(
+      expenses,
+      accounts.map((account) => account.name).toList(),
+    );
     if (mounted) {
       setState(() {
-        _accounts = results[0] as List<Account>;
-        _cashBalance = cashBalance;
+        _accounts = accounts;
+        _accountBalances = balances;
         _loading = false;
       });
     }
@@ -980,7 +1040,7 @@ class _AccountsManagePageState extends State<_AccountsManagePage> {
       body: _AccountsTab(
         loading: _loading,
         customAccounts: _accounts,
-        cashBalance: _cashBalance,
+        accountBalances: _accountBalances,
         onAddAccount: _handleAdd,
         onEditAccount: _handleEdit,
       ),
@@ -992,16 +1052,18 @@ class _AccountsTab extends StatelessWidget {
   const _AccountsTab({
     required this.loading,
     required this.customAccounts,
-    required this.cashBalance,
+    required this.accountBalances,
     required this.onAddAccount,
     required this.onEditAccount,
   });
 
   final bool loading;
   final List<Account> customAccounts;
-  final double cashBalance;
+  final Map<String, double> accountBalances;
   final Future<void> Function() onAddAccount;
   final Future<void> Function(Account account) onEditAccount;
+
+  double _balanceFor(String accountKey) => accountBalances[accountKey] ?? 0;
 
   @override
   Widget build(BuildContext context) {
@@ -1022,7 +1084,7 @@ class _AccountsTab extends StatelessWidget {
                 ),
                 _AccountBalanceCard(
                   title: 'Cash account',
-                  amount: cashBalance,
+                  amount: _balanceFor(kCashAccount),
                   icon: Icons.payments_outlined,
                   color: kCashTint,
                 ),
@@ -1042,7 +1104,7 @@ class _AccountsTab extends StatelessWidget {
                         onTap: () => onEditAccount(account),
                         child: _AccountBalanceCard(
                           title: account.name,
-                          amount: account.balance,
+                          amount: _balanceFor(account.name),
                           icon: Icons.account_balance_wallet_outlined,
                           color: Color(account.colorValue),
                         ),

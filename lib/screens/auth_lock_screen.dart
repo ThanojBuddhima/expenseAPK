@@ -13,10 +13,12 @@ class AuthLockScreen extends StatefulWidget {
     super.key,
     this.setupMode = false,
     this.buildDashboard,
+    this.onUnlocked,
   });
 
   final bool setupMode;
   final Widget Function()? buildDashboard;
+  final VoidCallback? onUnlocked;
 
   @override
   State<AuthLockScreen> createState() => _AuthLockScreenState();
@@ -72,10 +74,16 @@ class _AuthLockScreenState extends State<AuthLockScreen> {
   }
 
   void _goToDashboard() {
+    if (widget.onUnlocked != null) {
+      AuthService.instance.unlockSession();
+      widget.onUnlocked!();
+      return;
+    }
     final builder = widget.buildDashboard;
     if (builder == null) {
       return;
     }
+    AuthService.instance.unlockSession();
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => builder()),
     );

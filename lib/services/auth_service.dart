@@ -77,4 +77,20 @@ class AuthService {
   Future<bool> requiresUnlock() async {
     return await AppPreferences.instance.pinEnabled;
   }
+
+  bool _sessionLocked = false;
+
+  bool get isSessionLocked => _sessionLocked;
+
+  void lockSession() {
+    _sessionLocked = true;
+  }
+
+  void unlockSession() {
+    _sessionLocked = false;
+  }
+
+  Future<bool> shouldLockOnBackground() async {
+    return await requiresUnlock();
+  }
 }

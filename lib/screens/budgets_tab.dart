@@ -21,9 +21,13 @@ class _BudgetSheetResult {
 }
 
 class _BudgetEditorSheet extends StatefulWidget {
-  const _BudgetEditorSheet({this.existing});
+  const _BudgetEditorSheet({
+    this.existing,
+    required this.existingBudgets,
+  });
 
   final Budget? existing;
+  final List<Budget> existingBudgets;
 
   @override
   State<_BudgetEditorSheet> createState() => _BudgetEditorSheetState();
@@ -55,6 +59,31 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
     _loadCategories();
   }
 
+  int get _year =>
+      int.tryParse(_yearController.text.trim()) ?? DateTime.now().year;
+
+  bool _hasBudgetFor(String categoryName, int year, int month) {
+    return widget.existingBudgets.any(
+      (budget) {
+        if (widget.existing?.id != null && budget.id == widget.existing!.id) {
+          return false;
+        }
+        return budget.categoryName == categoryName &&
+            budget.year == year &&
+            budget.month == month;
+      },
+    );
+  }
+
+  bool get _overallTaken => _hasBudgetFor(_overallValue, _year, _month);
+
+  List<String> get _availableCategoryNames {
+    return _categories
+        .map((category) => category.name)
+        .where((name) => !_hasBudgetFor(name, _year, _month))
+        .toList();
+  }
+
   Future<void> _loadCategories() async {
     final items = await DBService.instance.getAllCategories();
     if (!mounted) {
@@ -64,8 +93,19 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
       _categories = items;
       _loadingCategories = false;
       if (_selectedCategory.isNotEmpty &&
-          !items.any((c) => c.name == _selectedCategory)) {
-        _selectedCategory = _overallValue;
+          !_categories.any((c) => c.name == _selectedCategory) &&
+          widget.existing == null) {
+        _selectedCategory = _overallTaken ? '' : _overallValue;
+      }
+      if (widget.existing == null &&
+          _selectedCategory.isNotEmpty &&
+          _hasBudgetFor(_selectedCategory, _year, _month)) {
+        _selectedCategory =
+            _overallTaken
+                ? (_availableCategoryNames.isNotEmpty
+                    ? _availableCategoryNames.first
+                    : '')
+                : _overallValue;
       }
     });
   }
@@ -77,16 +117,47 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
     super.dispose();
   }
 
+  String _budgetLabel(String categoryName) {
+    return categoryName.isEmpty ? 'Overall (all categories)' : categoryName;
+  }
+
   void _submit() {
     final amount = double.tryParse(_amountController.text.trim()) ?? 0;
     if (amount <= 0) {
       return;
     }
+
+    final year = _year;
+    final categoryName = _selectedCategory;
+
+    if (widget.existing == null && _hasBudgetFor(categoryName, year, _month)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You already set a budget for "${_budgetLabel(categoryName)}" '
+            'in $_month/$year.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (categoryName.isEmpty && _overallTaken && widget.existing == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You already set an overall budget for $_month/$year.',
+          ),
+        ),
+      );
+      return;
+    }
+
     Navigator.of(context).pop(
       _BudgetSheetResult(
-        categoryName: _selectedCategory,
+        categoryName: categoryName,
         amount: amount,
-        year: int.tryParse(_yearController.text.trim()) ?? DateTime.now().year,
+        year: year,
         month: _month,
       ),
     );
@@ -95,6 +166,37 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
   @override
   Widget build(BuildContext context) {
     final existing = widget.existing;
+    final showOverall = existing?.isOverall == true || !_overallTaken;
+    final categoryItems = _availableCategoryNames;
+
+    if (widget.existing == null &&
+        !showOverall &&
+        categoryItems.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'All budgets set',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Every category and the overall budget already have a budget '
+              'for $_month/$_year.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -116,33 +218,51 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(child: CircularProgressIndicator()),
             )
+          else if (existing != null)
+            InputDecorator(
+              decoration: const InputDecoration(labelText: 'Category'),
+              child: Text(_budgetLabel(_selectedCategory)),
+            )
           else
             DropdownButtonFormField<String>(
-              key: ValueKey(_selectedCategory),
-              initialValue: _selectedCategory,
+              key: ValueKey('$_selectedCategory-$_month-$_year'),
+              initialValue: _selectedCategory.isEmpty ||
+                      (!_selectedCategory.isEmpty &&
+                          widget.existing == null &&
+                          _hasBudgetFor(_selectedCategory, _year, _month))
+                  ? (showOverall
+                      ? _overallValue
+                      : (categoryItems.isNotEmpty ? categoryItems.first : null))
+                  : _selectedCategory,
               decoration: const InputDecoration(
                 labelText: 'Category',
               ),
               items: [
-                const DropdownMenuItem(
-                  value: _overallValue,
-                  child: Text('Overall (all categories)'),
-                ),
-                ..._categories.map(
-                  (category) => DropdownMenuItem(
-                    value: category.name,
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.circle,
-                          size: 12,
-                          color: Color(category.colorValue),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(category.name),
-                      ],
-                    ),
+                if (showOverall)
+                  const DropdownMenuItem(
+                    value: _overallValue,
+                    child: Text('Overall (all categories)'),
                   ),
+                ...categoryItems.map(
+                  (name) {
+                    final category = _categories.firstWhere(
+                      (item) => item.name == name,
+                    );
+                    return DropdownMenuItem(
+                      value: name,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.circle,
+                            size: 12,
+                            color: Color(category.colorValue),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(name),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ],
               onChanged: (value) {
@@ -172,7 +292,10 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
                       child: Text('${i + 1}'),
                     ),
                   ),
-                  onChanged: (v) => setState(() => _month = v ?? _month),
+                  onChanged: (v) {
+                    setState(() => _month = v ?? _month);
+                    _loadCategories();
+                  },
                 ),
               ),
               const SizedBox(width: 12),
@@ -181,6 +304,7 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
                   controller: _yearController,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Year'),
+                  onChanged: (_) => setState(() {}),
                 ),
               ),
             ],
@@ -230,15 +354,63 @@ class _BudgetsTabState extends State<BudgetsTab> {
     }
   }
 
+  String _budgetLabel(Budget budget) =>
+      budget.isOverall ? 'Overall budget' : budget.categoryName;
+
   Future<void> _openEditor([Budget? existing]) async {
     final result = await showModalBottomSheet<_BudgetSheetResult>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _BudgetEditorSheet(existing: existing),
+      builder: (context) => _BudgetEditorSheet(
+        existing: existing,
+        existingBudgets: _budgets,
+      ),
     );
 
     if (result == null || !mounted) {
       return;
+    }
+
+    if (existing == null) {
+      final duplicate = await _db.getBudgetForMonth(
+        year: result.year,
+        month: result.month,
+        categoryName: result.categoryName,
+      );
+      if (duplicate != null) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'You already set a budget for "${_budgetLabel(duplicate)}" '
+              'in ${result.month}/${result.year}.',
+            ),
+          ),
+        );
+        return;
+      }
+    } else {
+      final conflict = await _db.getBudgetForMonth(
+        year: result.year,
+        month: result.month,
+        categoryName: result.categoryName,
+      );
+      if (conflict != null && conflict.id != existing.id) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'You already set a budget for "${_budgetLabel(conflict)}" '
+              'in ${result.month}/${result.year}.',
+            ),
+          ),
+        );
+        return;
+      }
     }
 
     final budget = Budget(
@@ -259,7 +431,7 @@ class _BudgetsTabState extends State<BudgetsTab> {
   }
 
   Future<void> _deleteBudget(Budget budget) async {
-    final label = budget.isOverall ? 'Overall budget' : budget.categoryName;
+    final label = _budgetLabel(budget);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -324,9 +496,7 @@ class _BudgetsTabState extends State<BudgetsTab> {
                     color: AppColors.primary,
                   ),
                 ),
-                title: Text(
-                  budget.isOverall ? 'Overall budget' : budget.categoryName,
-                ),
+                title: Text(_budgetLabel(budget)),
                 subtitle: Text(
                   '${budget.month}/${budget.year} • '
                   '\$${budget.amount.toStringAsFixed(2)}',

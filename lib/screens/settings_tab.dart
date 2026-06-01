@@ -6,6 +6,7 @@ import '../screens/auth_lock_screen.dart';
 import '../services/app_preferences.dart';
 import '../services/auth_service.dart';
 import '../services/currency_service.dart';
+import '../widgets/app_update_dialog.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({
@@ -293,6 +294,20 @@ class _SettingsTabState extends State<SettingsTab> {
               title: const Text('Change PIN'),
               enabled: _pinEnabled,
               onTap: _pinEnabled ? _setupPin : null,
+            ),
+            const SizedBox(height: 12),
+            _SectionTitle('App'),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.system_update_rounded),
+                title: const Text('Check for updates'),
+                subtitle: const Text('Download latest APK from GitHub'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => checkAndPromptForUpdate(
+                  context,
+                  silentIfLatest: false,
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             _SectionTitle('General'),

@@ -15,6 +15,9 @@ dependencies:
   fl_chart: ^0.69.0
   local_auth: ^2.3.0
   shared_preferences: ^2.3.0
+  package_info_plus: ^8.3.0
+  http: ^1.4.0
+  open_filex: ^4.7.0
   flutter_localizations:
     sdk: flutter
 
