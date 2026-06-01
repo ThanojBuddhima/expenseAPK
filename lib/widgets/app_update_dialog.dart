@@ -75,6 +75,13 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
     }
   }
 
+  Future<void> _dismissForNow() async {
+    await UpdateService.instance.dismissVersion(widget.release.version);
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final release = widget.release;
@@ -121,7 +128,7 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
       actions: [
         if (!_downloading)
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: _dismissForNow,
             child: const Text('Later'),
           ),
         FilledButton(
@@ -133,9 +140,11 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
   }
 }
 
+/// [automatic] — once per app session, respects "Later" for that release version.
 Future<void> checkAndPromptForUpdate(
   BuildContext context, {
   bool silentIfLatest = true,
+  bool automatic = false,
 }) async {
   if (!UpdateService.instance.isSupported) {
     if (!silentIfLatest && context.mounted) {
@@ -148,8 +157,17 @@ Future<void> checkAndPromptForUpdate(
     return;
   }
 
+  if (automatic) {
+    if (UpdateService.instance.silentCheckRanThisSession) {
+      return;
+    }
+    UpdateService.instance.markSilentCheckRan();
+  }
+
   try {
-    final release = await UpdateService.instance.checkForUpdate();
+    final release = await UpdateService.instance.checkForUpdate(
+      respectDismissed: automatic,
+    );
     if (!context.mounted) {
       return;
     }

@@ -8,6 +8,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'app_preferences.dart';
+
 class AppReleaseInfo {
   const AppReleaseInfo({
     required this.version,
@@ -28,16 +30,30 @@ class UpdateService {
   static const _repo = 'expenseAPK';
   static const _apkName = 'app-release.apk';
 
+  bool _silentCheckRanThisSession = false;
+
   bool get isSupported => !kIsWeb && Platform.isAndroid;
 
-  Future<AppReleaseInfo?> checkForUpdate() async {
+  /// Automatic startup check runs at most once per app process.
+  bool get silentCheckRanThisSession => _silentCheckRanThisSession;
+
+  void markSilentCheckRan() {
+    _silentCheckRanThisSession = true;
+  }
+
+  /// Returns release info only when GitHub latest is strictly newer than the
+  /// installed app version.
+  Future<AppReleaseInfo?> checkForUpdate({
+    bool respectDismissed = false,
+  }) async {
     if (!isSupported) {
       return null;
     }
 
     try {
       final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.version;
+      final currentVersion = packageInfo.version.trim();
+      final currentBuild = int.tryParse(packageInfo.buildNumber.trim()) ?? 0;
 
       final uri = Uri.parse(
         'https://api.github.com/repos/$_owner/$_repo/releases/latest',
@@ -52,9 +68,24 @@ class UpdateService {
 
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       final tag = (json['tag_name'] as String?) ?? '';
-      final latestVersion = tag.startsWith('v') ? tag.substring(1) : tag;
-      if (latestVersion.isEmpty || !_isNewer(latestVersion, currentVersion)) {
+      final latestVersion = _normalizeVersionTag(tag);
+      if (latestVersion.isEmpty) {
         return null;
+      }
+
+      if (!_isStrictlyNewer(
+        latestVersion: latestVersion,
+        currentVersion: currentVersion,
+        currentBuild: currentBuild,
+      )) {
+        return null;
+      }
+
+      if (respectDismissed) {
+        final dismissed = await AppPreferences.instance.dismissedUpdateVersion;
+        if (dismissed != null && dismissed == latestVersion) {
+          return null;
+        }
       }
 
       final assets = json['assets'] as List<dynamic>? ?? [];
@@ -83,6 +114,10 @@ class UpdateService {
       }
       return null;
     }
+  }
+
+  Future<void> dismissVersion(String version) async {
+    await AppPreferences.instance.setDismissedUpdateVersion(version);
   }
 
   Future<File> downloadApk(
@@ -120,23 +155,46 @@ class UpdateService {
     );
   }
 
-  bool _isNewer(String latest, String current) {
-    final latestParts = _parseVersion(latest);
-    final currentParts = _parseVersion(current);
-    final length = latestParts.length > currentParts.length
-        ? latestParts.length
-        : currentParts.length;
+  String _normalizeVersionTag(String tag) {
+    final trimmed = tag.trim();
+    if (trimmed.startsWith('v') || trimmed.startsWith('V')) {
+      return trimmed.substring(1);
+    }
+    return trimmed;
+  }
+
+  /// True only when [latestVersion] is greater than the installed version.
+  bool _isStrictlyNewer({
+    required String latestVersion,
+    required String currentVersion,
+    required int currentBuild,
+  }) {
+    final comparison = _compareSemver(latestVersion, currentVersion);
+    if (comparison > 0) {
+      return true;
+    }
+    if (comparison < 0) {
+      return false;
+    }
+    // Same semver as release tag — treat as up to date (build number is local).
+    return false;
+  }
+
+  /// Negative if a < b, zero if equal, positive if a > b.
+  int _compareSemver(String a, String b) {
+    final aParts = _parseVersion(a);
+    final bParts = _parseVersion(b);
+    final length = aParts.length > bParts.length
+        ? aParts.length
+        : bParts.length;
     for (var i = 0; i < length; i++) {
-      final l = i < latestParts.length ? latestParts[i] : 0;
-      final c = i < currentParts.length ? currentParts[i] : 0;
-      if (l > c) {
-        return true;
-      }
-      if (l < c) {
-        return false;
+      final av = i < aParts.length ? aParts[i] : 0;
+      final bv = i < bParts.length ? bParts[i] : 0;
+      if (av != bv) {
+        return av.compareTo(bv);
       }
     }
-    return false;
+    return 0;
   }
 
   List<int> _parseVersion(String version) {

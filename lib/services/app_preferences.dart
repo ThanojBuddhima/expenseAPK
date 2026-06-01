@@ -13,6 +13,7 @@ class AppPreferences {
   static const _pinSetupCompleteKey = 'pin_setup_complete';
   static const _onboardingCompleteKey = 'onboarding_complete';
   static const _defaultCurrencyKey = 'default_currency';
+  static const _dismissedUpdateVersionKey = 'dismissed_update_version';
 
   SharedPreferences? _prefs;
   final Map<String, Object> _memory = <String, Object>{};
@@ -178,5 +179,20 @@ class AppPreferences {
     await _setBool(_pinEnabledKey, false);
     await _setBool(_pinSetupCompleteKey, false);
     await _setBool(_biometricEnabledKey, false);
+  }
+
+  Future<String?> get dismissedUpdateVersion async {
+    await init();
+    return _getString(_dismissedUpdateVersionKey);
+  }
+
+  Future<void> setDismissedUpdateVersion(String version) async {
+    await init();
+    await _setString(_dismissedUpdateVersionKey, version);
+  }
+
+  Future<void> clearDismissedUpdateVersion() async {
+    await init();
+    await _remove(_dismissedUpdateVersionKey);
   }
 }

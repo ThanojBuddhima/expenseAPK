@@ -223,7 +223,11 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
     if (!mounted) {
       return;
     }
-    await checkAndPromptForUpdate(context, silentIfLatest: true);
+    await checkAndPromptForUpdate(
+      context,
+      silentIfLatest: true,
+      automatic: true,
+    );
   }
 
   Future<void> _reloadDashboard() async {
