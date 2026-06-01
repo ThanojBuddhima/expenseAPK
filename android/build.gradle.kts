@@ -5,6 +5,11 @@ allprojects {
     }
 }
 
+// Pin Gradle Daemon to JDK 17 (portable — no machine-specific paths).
+tasks.named<org.gradle.buildconfiguration.tasks.UpdateDaemonJvm>("updateDaemonJvm") {
+    languageVersion.set(JavaLanguageVersion.of(17))
+}
+
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")

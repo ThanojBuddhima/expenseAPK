@@ -343,19 +343,49 @@ flutter pub get
 flutter build apk --release
 ```
 
+Or use the helper script (auto-selects JDK 17 on macOS if available):
+
+```bash
+./scripts/build_apk.sh
+```
+
 Output:
 
 ```
 build/app/outputs/flutter-apk/app-release.apk
 ```
 
-### JDK 17 (if Android build fails)
+### JDK 17 (Gradle / Android)
 
-Use JDK 17 for Android builds.
+Gradle 8.14 does **not** support running on JDK 25. This project uses a **portable** setup (no machine-specific paths in `gradle.properties`):
 
-- In CI, the release workflow already sets Java 17 via `actions/setup-java@v4`.
-- On local machines, configure your shell/IDE to use JDK 17.
-- Avoid hardcoding `org.gradle.java.home` with machine-specific paths in project files.
+| Mechanism | Purpose |
+|-----------|---------|
+| [`android/gradle/gradle-daemon-jvm.properties`](android/gradle/gradle-daemon-jvm.properties) | Pins the Gradle daemon to **JDK 17** (works on Mac, Linux, CI) |
+| Foojay toolchain resolver | Auto-downloads JDK 17 when needed |
+| GitHub Actions `setup-java@v17` | CI already uses Java 17 |
+
+**Do not** add `org.gradle.java.home=/Library/Java/...` to the repo — that breaks GitHub Actions on Linux.
+
+If the build still fails locally:
+
+```bash
+cd android && ./gradlew --stop
+flutter build apk --release
+```
+
+Or point your shell at JDK 17 once:
+
+```bash
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)   # macOS
+flutter build apk --release
+```
+
+Regenerate daemon JVM URLs after changing JDK requirements:
+
+```bash
+cd android && ./gradlew updateDaemonJvm --jvm-version=17
+```
 
 ---
 
@@ -473,7 +503,7 @@ Each category has an assigned pastel color used in charts and chips.
 |-------|----------|
 | **Biometrics not working** | Enable PIN first, then biometric unlock in Settings. Test on a real device — biometrics are not available on web. Ensure fingerprint/Face ID is enrolled on the device. |
 | **Biometric toggle won't stay on** | You must complete a successful biometric prompt when enabling the toggle. |
-| **Android build Java error** | Use JDK 17 (local shell/IDE) and keep project files free of machine-specific `org.gradle.java.home` paths. |
+| **Android build Java error (`25.0.1`)** | Stop old daemons: `cd android && ./gradlew --stop`. Project uses `gradle-daemon-jvm.properties` for JDK 17 — do not add Mac-only `org.gradle.java.home` paths. |
 | **Web data disappears** | Expected — web uses in-memory storage. Use Android/iOS for persistent data. |
 | **APK install blocked** | Allow "Install from unknown sources" or sideload via `adb install app-release.apk`. |
 | **Hot reload after native changes** | PIN/biometric and Android manifest changes require a **full restart** (`R` in terminal or stop & re-run). |
