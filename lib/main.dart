@@ -1538,7 +1538,7 @@ class _TransactionCard extends StatelessWidget {
     final accountColor = _accountColorFor(expense.accountType, accounts);
     final accountLabel = _accountDisplayName(expense.accountType);
     Color amountColor = expense.isIncome ? kIncomeTint : kExpenseTint;
-    String formattedAmount = _formatCurrency(expense.currency, expense.amount);
+    final formattedAmount = CurrencyService.format(expense.amount);
 
     return Dismissible(
       key: ValueKey('expense-${expense.id ?? expense.hashCode}'),
@@ -1618,7 +1618,7 @@ class _TransactionCard extends StatelessWidget {
                 SizedBox(
                   width: 36,
                   child: Icon(
-                    Icons.attach_money,
+                    Icons.payments_outlined,
                     color: amountColor.withOpacity(0.9),
                     size: 20,
                   ),
@@ -1865,7 +1865,7 @@ class _AccountBalanceCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      _plainMoney(amount),
+                      _money(amount),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             color: color,
                           ),
@@ -2451,7 +2451,7 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
             const SizedBox(height: 20),
             _ModernAddFieldSection(
               title: 'Amount',
-              icon: Icons.attach_money_rounded,
+              icon: Icons.payments_rounded,
               child: TextField(
                 controller: _amountController,
                 autofocus: true,
@@ -2466,6 +2466,7 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
                   context,
                   hintText: '0.00',
                   hintFontSize: 18,
+                  prefixText: '${CurrencyService.current.symbol} ',
                 ),
               ),
             ),
@@ -2903,9 +2904,11 @@ InputDecoration _themedInputDecoration(
   BuildContext context, {
   required String hintText,
   double hintFontSize = 16,
+  String? prefixText,
 }) {
   final palette = context.palette;
   return InputDecoration(
+    prefixText: prefixText,
     hintText: hintText,
     hintStyle: TextStyle(
       color: palette.textSecondary.withValues(alpha: 0.5),
@@ -2928,8 +2931,6 @@ InputDecoration _themedInputDecoration(
     ),
   );
 }
-
-String _plainMoney(double value) => value.toStringAsFixed(2);
 
 String _monthYearLabel(DateTime date) {
   const months = [
@@ -2970,23 +2971,6 @@ LinkedHashMap<DateTime, List<Expense>> _groupExpensesByDate(
 
 Color _chartColor(int index) {
   return AppColors.chartPalette[index % AppColors.chartPalette.length];
-}
-
-String _formatCurrency(String currency, double value) {
-  // Simple formatter: support INR 'INR' or 'Rs' -> 'Rs. 1,500.00', otherwise fallback to dollar style
-  String s = value.toStringAsFixed(2);
-  final parts = s.split('.');
-  final integer = parts[0];
-  final fraction = parts.length > 1 ? parts[1] : '00';
-  final reg = RegExp(r'\B(?=(\d{3})+(?!\d))');
-  final withCommas = integer.replaceAllMapped(reg, (m) => ',${m.group(0)}');
-  if (currency.toLowerCase() == 'inr' ||
-      currency.toLowerCase() == 'rs' ||
-      currency.toLowerCase() == 'rs.') {
-    return 'Rs. $withCommas.$fraction';
-  }
-  // default
-  return '\$${withCommas}.$fraction';
 }
 
 extension _IterableIndexExtension<T> on Iterable<T> {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../models/budget.dart';
 import '../models/category.dart';
+import '../services/currency_service.dart';
 import '../services/db_service.dart';
 import '../widgets/bottom_add_button.dart';
 
@@ -499,7 +500,7 @@ class _BudgetsTabState extends State<BudgetsTab> {
                 title: Text(_budgetLabel(budget)),
                 subtitle: Text(
                   '${budget.month}/${budget.year} • '
-                  '\$${budget.amount.toStringAsFixed(2)}',
+                  '${CurrencyService.format(budget.amount)}',
                 ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
