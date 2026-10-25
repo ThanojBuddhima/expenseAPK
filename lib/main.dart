@@ -31,13 +31,6 @@ import 'widgets/spending_trend_chart.dart';
 const String kCashAccount = 'cash';
 const String kIncomeType = 'income';
 const String kExpenseType = 'expense';
-const List<String> kIncomeCategories = [
-  'Salary',
-  'Bonus',
-  'Allowance',
-  'Other',
-];
-const String kDefaultIncomeCategory = 'Salary';
 const Color kPrimaryBlue = AppColors.primary;
 const Color kPrimaryBlueDeep = AppColors.primaryDeep;
 const Color kSurface = AppColors.surface;
@@ -173,9 +166,8 @@ class _ExpenseAppState extends State<ExpenseApp> with WidgetsBindingObserver {
         );
       },
       home: SplashScreen(
-        buildDashboard: () => ExpenseDashboardPage(
-          onThemeChanged: setThemeMode,
-        ),
+        buildDashboard: () =>
+            ExpenseDashboardPage(onThemeChanged: setThemeMode),
       ),
     );
   }
@@ -195,7 +187,10 @@ class _NoScrollbarBehavior extends MaterialScrollBehavior {
 
   @override
   Widget buildScrollbar(
-      BuildContext context, Widget child, ScrollableDetails details) {
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
     return child;
   }
 }
@@ -206,6 +201,7 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
   List<Expense> _expenses = <Expense>[];
   List<Account> _accounts = <Account>[];
   List<ExpenseCategory> _categories = <ExpenseCategory>[];
+  List<ExpenseCategory> _incomeCategories = <ExpenseCategory>[];
   List<Budget> _budgets = <Budget>[];
   bool _loading = true;
   int _selectedTab = 0;
@@ -240,13 +236,15 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
       _db.getAllExpenses(),
       _db.getAllAccounts(),
       _db.getAllCategories(),
+      _db.getAllIncomeCategories(),
       _db.getAllBudgets(),
     ]);
 
     final items = results[0] as List<Expense>;
     final accounts = results[1] as List<Account>;
     final categories = results[2] as List<ExpenseCategory>;
-    final budgets = results[3] as List<Budget>;
+    final incomeCategories = results[3] as List<ExpenseCategory>;
+    final budgets = results[4] as List<Budget>;
     if (!mounted) {
       return;
     }
@@ -255,6 +253,7 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
       _expenses = items;
       _accounts = accounts;
       _categories = categories;
+      _incomeCategories = incomeCategories;
       _budgets = budgets;
       _loading = false;
     });
@@ -326,6 +325,7 @@ class _ExpenseDashboardPageState extends State<ExpenseDashboardPage> {
             expense: expense,
             availableAccounts: _accounts,
             categories: _categories,
+            incomeCategories: _incomeCategories,
           );
         },
       ),
@@ -595,8 +595,12 @@ class _HomeTabState extends State<_HomeTab> {
   double get _currentMonthExpenses {
     final now = DateTime.now();
     return widget.expenses
-        .where((e) =>
-            e.isExpense && e.date.year == now.year && e.date.month == now.month)
+        .where(
+          (e) =>
+              e.isExpense &&
+              e.date.year == now.year &&
+              e.date.month == now.month,
+        )
         .fold<double>(0, (sum, e) => sum + e.amount);
   }
 
@@ -633,8 +637,7 @@ class _HomeTabState extends State<_HomeTab> {
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: TextField(
                     controller: _searchController,
-                    onChanged: (value) =>
-                        setState(() => _searchQuery = value),
+                    onChanged: (value) => setState(() => _searchQuery = value),
                     decoration: InputDecoration(
                       hintText: 'Search expenses...',
                       prefixIcon: const Icon(Icons.search_rounded),
@@ -674,8 +677,7 @@ class _HomeTabState extends State<_HomeTab> {
                             child: OutlinedChoiceButton(
                               label: category.name,
                               color: kTextPrimary,
-                              isSelected:
-                                  _selectedCategory == category.name,
+                              isSelected: _selectedCategory == category.name,
                               compact: true,
                               onTap: () => setState(
                                 () => _selectedCategory = category.name,
@@ -698,10 +700,7 @@ class _HomeTabState extends State<_HomeTab> {
                 ),
                 if (budget != null) ...[
                   const SizedBox(height: 12),
-                  _BudgetProgressCard(
-                    spent: monthSpend,
-                    limit: budget.amount,
-                  ),
+                  _BudgetProgressCard(spent: monthSpend, limit: budget.amount),
                 ],
                 const SizedBox(height: 12),
                 _SectionHeader(
@@ -718,26 +717,26 @@ class _HomeTabState extends State<_HomeTab> {
                   )
                 else
                   ..._groupExpensesByDate(expenses).entries.expand(
-                        (entry) => [
-                          _DayTransactionGroupHeader(
-                            date: entry.key,
-                            expenses: entry.value,
-                          ),
-                          const SizedBox(height: 8),
-                          ...entry.value.map(
-                            (expense) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: _TransactionCard(
-                                expense: expense,
-                                accounts: widget.accounts,
-                                onDelete: () => widget.onDelete(expense),
-                                onEdit: () => widget.onEdit(expense),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                        ],
+                    (entry) => [
+                      _DayTransactionGroupHeader(
+                        date: entry.key,
+                        expenses: entry.value,
                       ),
+                      const SizedBox(height: 8),
+                      ...entry.value.map(
+                        (expense) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _TransactionCard(
+                            expense: expense,
+                            accounts: widget.accounts,
+                            onDelete: () => widget.onDelete(expense),
+                            onEdit: () => widget.onEdit(expense),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                  ),
               ],
             ),
     );
@@ -898,7 +897,9 @@ class _StatsTabState extends State<_StatsTab> {
                         : 0.0;
                     return Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 6),
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
                       child: _CategoryBreakdownListItem(
                         category: category,
                         amount: _money(amount),
@@ -954,27 +955,24 @@ class _CategoryBreakdownListItem extends StatelessWidget {
             ),
             child: Text(
               '${percent.toStringAsFixed(0)}%',
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(color: color, fontWeight: FontWeight.w700),
             ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
               category,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
-          Text(amount,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            amount,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
         ],
       ),
     );
@@ -1142,9 +1140,9 @@ class _BudgetProgressCard extends StatelessWidget {
           children: [
             Text(
               'Monthly budget',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
             ClipRRect(
@@ -1242,8 +1240,11 @@ class _SummaryStrip extends StatelessWidget {
 }
 
 class _SummaryChip extends StatelessWidget {
-  const _SummaryChip(
-      {required this.label, required this.value, required this.color});
+  const _SummaryChip({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   final String label;
   final String value;
@@ -1259,17 +1260,17 @@ class _SummaryChip extends StatelessWidget {
         children: [
           Text(
             label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: palette.textSecondary,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: palette.textSecondary),
           ),
           const SizedBox(height: 8),
           Text(
             value,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(color: color, fontWeight: FontWeight.w900),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ],
       ),
@@ -1300,8 +1301,11 @@ class _SummaryGrid extends StatelessWidget {
 }
 
 class _MiniMetric extends StatelessWidget {
-  const _MiniMetric(
-      {required this.label, required this.value, required this.color});
+  const _MiniMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   final String label;
   final String value;
@@ -1317,9 +1321,10 @@ class _MiniMetric extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-              color: kPrimaryBlue.withOpacity(0.08),
-              blurRadius: 18,
-              offset: const Offset(0, 10)),
+            color: kPrimaryBlue.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
         ],
       ),
       child: Column(
@@ -1329,16 +1334,18 @@ class _MiniMetric extends StatelessWidget {
             height: 40,
             width: 40,
             decoration: BoxDecoration(
-                color: color.withOpacity(0.14),
-                borderRadius: BorderRadius.circular(14)),
+              color: color.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
             child: Icon(Icons.circle, color: color, size: 18),
           ),
           const SizedBox(height: 14),
-          Text(value,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w900)),
+          Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 2),
           Text(label, style: Theme.of(context).textTheme.bodyMedium),
         ],
@@ -1384,16 +1391,19 @@ class _PieCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: kPrimaryBlue.withOpacity(0.08),
-              blurRadius: 18,
-              offset: const Offset(0, 10)),
+            color: kPrimaryBlue.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Category split',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Category split',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 16),
           AspectRatio(
             aspectRatio: 1.2,
@@ -1406,8 +1416,10 @@ class _PieCard extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('${segments.length}',
-                        style: Theme.of(context).textTheme.headlineMedium),
+                    Text(
+                      '${segments.length}',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
                     const Text('categories'),
                   ],
                 ),
@@ -1421,9 +1433,10 @@ class _PieCard extends StatelessWidget {
             children: segments
                 .map(
                   (segment) => _LegendPill(
-                      label: segment.label,
-                      value: _money(segment.value),
-                      color: segment.color),
+                    label: segment.label,
+                    value: _money(segment.value),
+                    color: segment.color,
+                  ),
                 )
                 .toList(),
           ),
@@ -1434,8 +1447,11 @@ class _PieCard extends StatelessWidget {
 }
 
 class _LegendPill extends StatelessWidget {
-  const _LegendPill(
-      {required this.label, required this.value, required this.color});
+  const _LegendPill({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   final String label;
   final String value;
@@ -1455,9 +1471,10 @@ class _LegendPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 8),
           Text(label),
           const SizedBox(width: 8),
@@ -1469,8 +1486,11 @@ class _LegendPill extends StatelessWidget {
 }
 
 class _PieSegment {
-  const _PieSegment(
-      {required this.label, required this.value, required this.color});
+  const _PieSegment({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   final String label;
   final double value;
@@ -1485,8 +1505,10 @@ class _PieChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final total =
-        segments.fold<double>(0, (sum, segment) => sum + segment.value);
+    final total = segments.fold<double>(
+      0,
+      (sum, segment) => sum + segment.value,
+    );
     if (total <= 0) {
       return;
     }
@@ -1505,11 +1527,7 @@ class _PieChartPainter extends CustomPainter {
       startAngle += sweepAngle;
     }
 
-    canvas.drawCircle(
-      center,
-      radius * 0.5,
-      Paint()..color = holeColor,
-    );
+    canvas.drawCircle(center, radius * 0.5, Paint()..color = holeColor);
   }
 
   @override
@@ -1631,30 +1649,29 @@ class _TransactionCard extends StatelessWidget {
                     children: [
                       Text(
                         expense.category,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: palette.textSecondary, fontSize: 12),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: palette.textSecondary,
+                          fontSize: 12,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         expense.displayTitle,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontSize: 16),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleMedium?.copyWith(fontSize: 16),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         accountLabel,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: palette.textSecondary, fontSize: 12),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: palette.textSecondary,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -1678,7 +1695,9 @@ class _TransactionCard extends StatelessWidget {
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: accountColor.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(12),
@@ -1750,9 +1769,9 @@ class _DayTransactionGroupHeader extends StatelessWidget {
                 Text(
                   _weekdayLabel(date.weekday),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: palette.textSecondary,
-                        fontSize: 10,
-                      ),
+                    color: palette.textSecondary,
+                    fontSize: 10,
+                  ),
                 ),
               ],
             ),
@@ -1794,9 +1813,9 @@ class _DayTransactionGroupHeader extends StatelessWidget {
               ),
               Text(
                 'Net ${_money(net)}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: kPrimaryBlueDeep,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: kPrimaryBlueDeep),
               ),
             ],
           ),
@@ -1807,11 +1826,12 @@ class _DayTransactionGroupHeader extends StatelessWidget {
 }
 
 class _AccountBalanceCard extends StatelessWidget {
-  const _AccountBalanceCard(
-      {required this.title,
-      required this.amount,
-      required this.icon,
-      required this.color});
+  const _AccountBalanceCard({
+    required this.title,
+    required this.amount,
+    required this.icon,
+    required this.color,
+  });
 
   final String title;
   final double amount;
@@ -1839,8 +1859,9 @@ class _AccountBalanceCard extends StatelessWidget {
             height: 56,
             width: 56,
             decoration: BoxDecoration(
-                color: color.withOpacity(0.14),
-                borderRadius: BorderRadius.circular(18)),
+              color: color.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(18),
+            ),
             child: Icon(icon, color: color),
           ),
           const SizedBox(width: 14),
@@ -1850,25 +1871,21 @@ class _AccountBalanceCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: color,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(color: color),
                 ),
                 const SizedBox(height: 4),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.trending_up_rounded,
-                      size: 18,
-                      color: color,
-                    ),
+                    Icon(Icons.trending_up_rounded, size: 18, color: color),
                     const SizedBox(width: 6),
                     Text(
                       _money(amount),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: color,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleLarge?.copyWith(color: color),
                     ),
                   ],
                 ),
@@ -1896,9 +1913,10 @@ class _SettingTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: kPrimaryBlue.withOpacity(0.08),
-              blurRadius: 18,
-              offset: const Offset(0, 10)),
+            color: kPrimaryBlue.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
         ],
       ),
       child: ListTile(
@@ -1912,8 +1930,11 @@ class _SettingTile extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState(
-      {required this.icon, required this.title, required this.subtitle});
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
 
   final IconData icon;
   final String title;
@@ -1951,17 +1972,17 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: palette.textPrimary,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(color: palette.textPrimary),
           ),
           const SizedBox(height: 6),
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: palette.textSecondary,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: palette.textSecondary),
           ),
         ],
       ),
@@ -1985,10 +2006,9 @@ class _SectionHeader extends StatelessWidget {
         if (action != null)
           Text(
             action!,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: palette.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: palette.textSecondary),
           ),
       ],
     );
@@ -2031,14 +2051,14 @@ class _BottomNavBar extends StatelessWidget {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 decoration: BoxDecoration(
                   color: palette.card.withValues(alpha: isDark ? 0.78 : 0.9),
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
-                    color: (isDark ? Colors.white : Colors.black)
-                        .withValues(alpha: isDark ? 0.1 : 0.06),
+                    color: (isDark ? Colors.white : Colors.black).withValues(
+                      alpha: isDark ? 0.1 : 0.06,
+                    ),
                   ),
                 ),
                 child: SizedBox(
@@ -2101,11 +2121,7 @@ class _AddNavItem extends StatelessWidget {
               color: kPrimaryBlue,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.add_rounded,
-              color: Colors.white,
-              size: 28,
-            ),
+            child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
           ),
         ),
       ),
@@ -2114,11 +2130,12 @@ class _AddNavItem extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
-  const _NavItem(
-      {required this.icon,
-      required this.label,
-      required this.active,
-      required this.onTap});
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;
@@ -2170,14 +2187,14 @@ class _ExpenseEditorResult {
   });
 
   const _ExpenseEditorResult.deleted()
-      : saved = false,
-        deleted = true,
-        amountText = '',
-        titleText = '',
-        categoryText = '',
-        noteText = '',
-        accountType = kCashAccount,
-        transactionType = kExpenseType;
+    : saved = false,
+      deleted = true,
+      amountText = '',
+      titleText = '',
+      categoryText = '',
+      noteText = '',
+      accountType = kCashAccount,
+      transactionType = kExpenseType;
 
   final bool saved;
   final bool deleted;
@@ -2194,11 +2211,13 @@ class _AddTransactionPage extends StatefulWidget {
     this.expense,
     required this.availableAccounts,
     required this.categories,
+    required this.incomeCategories,
   });
 
   final Expense? expense;
   final List<Account> availableAccounts;
   final List<ExpenseCategory> categories;
+  final List<ExpenseCategory> incomeCategories;
 
   @override
   State<_AddTransactionPage> createState() => _AddTransactionPageState();
@@ -2220,12 +2239,8 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
     _amountController = TextEditingController(
       text: expense == null ? '' : expense.amount.toStringAsFixed(2),
     );
-    _titleController = TextEditingController(
-      text: expense?.displayTitle ?? '',
-    );
-    _categoryController = TextEditingController(
-      text: expense?.category ?? '',
-    );
+    _titleController = TextEditingController(text: expense?.displayTitle ?? '');
+    _categoryController = TextEditingController(text: expense?.category ?? '');
     _noteController = TextEditingController(text: expense?.notes ?? '');
     _transactionType = expense?.transactionType ?? kExpenseType;
     _accountType = expense?.accountType ?? _defaultAccountType();
@@ -2233,35 +2248,41 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
   }
 
   List<String> get _categoryOptions {
+    late final List<String> names;
     if (_transactionType == kIncomeType) {
-      return kIncomeCategories;
+      names = widget.incomeCategories
+          .map((category) => category.name)
+          .toList();
+    } else if (widget.categories.isEmpty) {
+      names = ['Other'];
+    } else {
+      names = widget.categories.map((category) => category.name).toList();
+      if (!names.contains('Other')) {
+        names.add('Other');
+      }
     }
-    if (widget.categories.isEmpty) {
-      return const ['Other'];
-    }
-    final names = widget.categories.map((category) => category.name).toList();
-    if (!names.contains('Other')) {
-      names.add('Other');
+    if (_selectedCategory.isNotEmpty && !names.contains(_selectedCategory)) {
+      names.add(_selectedCategory);
     }
     return names;
   }
 
   List<_AccountChoice> get _accountChoices => [
-        const _AccountChoice(
-          value: kCashAccount,
-          label: 'Cash',
-          icon: Icons.payments_outlined,
-          color: kCashTint,
-        ),
-        ...widget.availableAccounts.map(
-          (account) => _AccountChoice(
-            value: account.name,
-            label: account.name,
-            icon: Icons.account_balance_wallet_outlined,
-            color: Color(account.colorValue),
-          ),
-        ),
-      ];
+    const _AccountChoice(
+      value: kCashAccount,
+      label: 'Cash',
+      icon: Icons.payments_outlined,
+      color: kCashTint,
+    ),
+    ...widget.availableAccounts.map(
+      (account) => _AccountChoice(
+        value: account.name,
+        label: account.name,
+        icon: Icons.account_balance_wallet_outlined,
+        color: Color(account.colorValue),
+      ),
+    ),
+  ];
 
   String _defaultAccountType() {
     final options = _accountChoices;
@@ -2279,12 +2300,17 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
       if (widget.expense == null) {
         _selectedCategory = _defaultCategory();
       } else if (type == kIncomeType) {
-        if (!kIncomeCategories.contains(_selectedCategory)) {
+        if (!widget.incomeCategories.any(
+          (category) => category.name == _selectedCategory,
+        )) {
           _selectedCategory = '';
         }
-      } else if (kIncomeCategories.contains(_selectedCategory)) {
-        _selectedCategory = '';
-      } else if (!_categoryOptions.contains(_selectedCategory)) {
+      } else if (widget.incomeCategories.any(
+        (category) => category.name == _selectedCategory,
+      ) ||
+          !widget.categories.any(
+            (category) => category.name == _selectedCategory,
+          )) {
         _selectedCategory = '';
       }
     });
@@ -2322,15 +2348,15 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
 
   void _save() {
     if (_accountType.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select an account')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select an account')));
       return;
     }
     if (_categoryOptions.isNotEmpty && _selectedCategory.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a category')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select a category')));
       return;
     }
     _close(true);
@@ -2391,7 +2417,9 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
         title: Text(
           widget.expense == null
               ? (_transactionType == kIncomeType ? 'Add income' : 'Add expense')
-              : (_transactionType == kIncomeType ? 'Edit income' : 'Edit expense'),
+              : (_transactionType == kIncomeType
+                    ? 'Edit income'
+                    : 'Edit expense'),
           style: TextStyle(
             color: palette.textPrimary,
             fontWeight: FontWeight.w600,
@@ -2400,7 +2428,12 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(20, AppTheme.screenTopPadding, 20, 32 + bottomInset),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          AppTheme.screenTopPadding,
+          20,
+          32 + bottomInset,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -2455,8 +2488,9 @@ class _AddTransactionPageState extends State<_AddTransactionPage> {
               child: TextField(
                 controller: _amountController,
                 autofocus: true,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -2682,7 +2716,12 @@ class _AddAccountPageState extends State<_AddAccountPage> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(20, AppTheme.screenTopPadding, 20, 32 + bottomInset),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          AppTheme.screenTopPadding,
+          20,
+          32 + bottomInset,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -2698,7 +2737,10 @@ class _AddAccountPageState extends State<_AddAccountPage> {
                   fontWeight: FontWeight.w500,
                   color: palette.textPrimary,
                 ),
-                decoration: _themedInputDecoration(context, hintText: 'Savings'),
+                decoration: _themedInputDecoration(
+                  context,
+                  hintText: 'Savings',
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -2726,15 +2768,10 @@ class _AddAccountPageState extends State<_AddAccountPage> {
                               color: _selectedColorValue == color.value
                                   ? color
                                   : palette.border,
-                              width:
-                                  _selectedColorValue == color.value ? 2 : 1,
+                              width: _selectedColorValue == color.value ? 2 : 1,
                             ),
                           ),
-                          child: Icon(
-                            Icons.circle,
-                            size: 18,
-                            color: color,
-                          ),
+                          child: Icon(Icons.circle, size: 18, color: color),
                         ),
                       ),
                     )
@@ -2748,8 +2785,9 @@ class _AddAccountPageState extends State<_AddAccountPage> {
               child: TextField(
                 controller: _balanceController,
                 readOnly: isEditing,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -2772,7 +2810,9 @@ class _AddAccountPageState extends State<_AddAccountPage> {
                       double.tryParse(_balanceController.text.trim()) ?? 0;
                   if (name.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter an account name')),
+                      const SnackBar(
+                        content: Text('Please enter an account name'),
+                      ),
                     );
                     return;
                   }
@@ -2854,10 +2894,10 @@ class _ModernAddFieldSection extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: palette.textPrimary,
-                    fontSize: 15,
-                  ),
+                fontWeight: FontWeight.w700,
+                color: palette.textPrimary,
+                fontSize: 15,
+              ),
             ),
           ],
         ),
@@ -2869,10 +2909,7 @@ class _ModernAddFieldSection extends StatelessWidget {
 }
 
 class _ModernToggleSection extends StatelessWidget {
-  const _ModernToggleSection({
-    required this.title,
-    required this.child,
-  });
+  const _ModernToggleSection({required this.title, required this.child});
 
   final String title;
   final Widget child;
@@ -2886,10 +2923,10 @@ class _ModernToggleSection extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: palette.textPrimary,
-                fontSize: 15,
-              ),
+            fontWeight: FontWeight.w700,
+            color: palette.textPrimary,
+            fontSize: 15,
+          ),
         ),
         const SizedBox(height: 12),
         child,
@@ -2961,8 +2998,11 @@ LinkedHashMap<DateTime, List<Expense>> _groupExpensesByDate(
   final groups = LinkedHashMap<DateTime, List<Expense>>();
 
   for (final expense in expenses) {
-    final date =
-        DateTime(expense.date.year, expense.date.month, expense.date.day);
+    final date = DateTime(
+      expense.date.year,
+      expense.date.month,
+      expense.date.day,
+    );
     groups.putIfAbsent(date, () => <Expense>[]).add(expense);
   }
 

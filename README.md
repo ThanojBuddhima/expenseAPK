@@ -80,7 +80,7 @@ https://github.com/ThanojBuddhima/expenseAPK/releases/latest/download/app-releas
 | **Period filtering** | Navigate by **day**, **week**, **month**, or **year** |
 | **Category filtering** | Horizontal chip filter on the dashboard |
 | **Smart defaults** | Account and category are not pre-selected unless only one option exists; validation prompts if missing |
-| **Income categories** | Salary, Bonus, Allowance, Other |
+| **Income categories** | Salary, Bonus, Allowance, and Other by default; manage income categories separately from expenses |
 | **Expense categories** | User-managed categories from the database |
 
 ### Dashboard
@@ -470,28 +470,18 @@ Database file: `expenses.db` in the app documents directory.
 
 ## Supported currencies
 
-| Code | Region | Symbol |
-|------|--------|--------|
-| USD | United States | $ |
-| GBP | United Kingdom | £ |
-| EUR | European Union | € |
-| INR | India | Rs. |
-| LKR | Sri Lanka | Rs. |
-| AUD | Australia | A$ |
-| CAD | Canada | C$ |
-| JPY | Japan | ¥ |
-| SGD | Singapore | S$ |
-| AED | United Arab Emirates | AED |
+The offline currency picker includes 154 currently used ISO currency codes, with names, symbols, and currency-specific decimal precision. It includes commonly used options such as USD, LKR, GBP, EUR, INR, JPY, and many more.
 
-Change the default in **Settings → Amount type**.
+Change the default in **Settings → Amount type**. This changes how amounts are displayed; it does not convert or alter saved transaction values. Historical currencies and cryptocurrencies are not included.
 
 ---
 
 ## Default categories
 
-Seeded on first database creation:
+Expense categories are seeded on first database creation. Income categories are managed separately and are seeded with Salary, Bonus, Allowance, and Other:
 
-Food · Transport · Shopping · Bills · Entertainment · Health · General
+**Expenses:** Food · Transport · Shopping · Bills · Entertainment · Health · General · Other
+**Income:** Salary · Bonus · Allowance · Other
 
 Each category has an assigned pastel color used in charts and chips.
 

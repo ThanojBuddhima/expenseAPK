@@ -90,10 +90,16 @@ class _SettingsTabState extends State<SettingsTab> {
                     'Choose the default currency for amounts shown in the app.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'This changes display formatting only; it does not convert saved amounts.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     key: ValueKey(selected),
                     initialValue: selected,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Country / currency',
                     ),
@@ -101,7 +107,10 @@ class _SettingsTabState extends State<SettingsTab> {
                         .map(
                           (option) => DropdownMenuItem(
                             value: option.code,
-                            child: Text(option.label),
+                            child: Text(
+                              option.label,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         )
                         .toList(),
@@ -114,10 +123,7 @@ class _SettingsTabState extends State<SettingsTab> {
                   const SizedBox(height: 12),
                   Builder(
                     builder: (context) {
-                      final option = kCurrencyOptions.firstWhere(
-                        (item) => item.code == selected,
-                        orElse: () => kCurrencyOptions.first,
-                      );
+                      final option = CurrencyService.optionForCode(selected);
                       return Card(
                         child: ListTile(
                           leading: const Icon(
@@ -126,7 +132,7 @@ class _SettingsTabState extends State<SettingsTab> {
                           ),
                           title: const Text('Preview'),
                           subtitle: Text(
-                            _formatCurrencyPreview(option, 1234.56),
+                            CurrencyService.formatWithOption(option, 1234.56),
                             style: Theme.of(context)
                                 .textTheme
                                 .titleMedium
@@ -164,10 +170,8 @@ class _SettingsTabState extends State<SettingsTab> {
     widget.onCurrencyChanged();
   }
 
-  CurrencyOption get _currentCurrency => kCurrencyOptions.firstWhere(
-        (option) => option.code == _currencyCode,
-        orElse: () => kCurrencyOptions.first,
-      );
+  CurrencyOption get _currentCurrency =>
+      CurrencyService.optionForCode(_currencyCode);
 
   Future<void> _setupPin() async {
     final ok = await Navigator.of(context).push<bool>(
@@ -188,13 +192,18 @@ class _SettingsTabState extends State<SettingsTab> {
       body: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, AppTheme.screenTopPadding, 16, 140),
+          padding: const EdgeInsets.fromLTRB(
+            16,
+            AppTheme.screenTopPadding,
+            16,
+            140,
+          ),
           children: [
             Text(
               'Settings',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
             _SectionTitle('Appearance'),
@@ -244,10 +253,9 @@ class _SettingsTabState extends State<SettingsTab> {
                               ? 'Always use dark theme'
                               : 'Always use light pastel theme',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.6),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
                     ),
                   ],
@@ -258,7 +266,9 @@ class _SettingsTabState extends State<SettingsTab> {
             _SectionTitle('Security'),
             SwitchListTile(
               title: const Text('PIN lock'),
-              subtitle: Text(_pinEnabled ? 'PIN is enabled' : 'Protect app with PIN'),
+              subtitle: Text(
+                _pinEnabled ? 'PIN is enabled' : 'Protect app with PIN',
+              ),
               value: _pinEnabled,
               onChanged: (enabled) async {
                 if (enabled) {
@@ -283,8 +293,9 @@ class _SettingsTabState extends State<SettingsTab> {
                             return;
                           }
                         }
-                        await AppPreferences.instance
-                            .setBiometricEnabled(enabled);
+                        await AppPreferences.instance.setBiometricEnabled(
+                          enabled,
+                        );
                         await _load();
                       }
                     : null,
@@ -303,10 +314,8 @@ class _SettingsTabState extends State<SettingsTab> {
                 title: const Text('Check for updates'),
                 subtitle: const Text('Download latest APK from GitHub'),
                 trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => checkAndPromptForUpdate(
-                  context,
-                  silentIfLatest: false,
-                ),
+                onTap: () =>
+                    checkAndPromptForUpdate(context, silentIfLatest: false),
               ),
             ),
             const SizedBox(height: 12),
@@ -373,23 +382,10 @@ class _SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
       ),
     );
   }
-}
-
-String _formatCurrencyPreview(CurrencyOption option, double value) {
-  final s = value.toStringAsFixed(2);
-  final parts = s.split('.');
-  final integer = parts[0];
-  final fraction = parts.length > 1 ? parts[1] : '00';
-  final reg = RegExp(r'\B(?=(\d{3})+(?!\d))');
-  final withCommas = integer.replaceAllMapped(reg, (m) => ',${m.group(0)}');
-  if (option.code == 'INR' || option.code == 'LKR') {
-    return '${option.symbol} $withCommas.$fraction';
-  }
-  return '${option.symbol}$withCommas.$fraction';
 }

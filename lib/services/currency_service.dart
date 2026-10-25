@@ -12,7 +12,8 @@ class CurrencyService {
     final normalized = currencyCode.trim().toUpperCase();
     return kCurrencyOptions.firstWhere(
       (option) => option.code == normalized,
-      orElse: () => kCurrencyOptions.first,
+      orElse: () =>
+          kCurrencyOptions.firstWhere((option) => option.code == 'USD'),
     );
   }
 
@@ -21,8 +22,12 @@ class CurrencyService {
   }
 
   static Future<void> setCode(String newCode) async {
-    code = newCode;
-    await AppPreferences.instance.setDefaultCurrency(newCode);
+    final normalized = newCode.trim().toUpperCase();
+    if (!kCurrencyOptions.any((option) => option.code == normalized)) {
+      throw ArgumentError.value(newCode, 'newCode', 'Unsupported currency');
+    }
+    code = normalized;
+    await AppPreferences.instance.setDefaultCurrency(normalized);
   }
 
   /// Formats [value] using the user's selected app currency.
@@ -34,21 +39,16 @@ class CurrencyService {
   }
 
   static String formatWithOption(CurrencyOption option, double value) {
-    final s = value.toStringAsFixed(2);
+    final s = value.toStringAsFixed(option.decimalDigits);
     final parts = s.split('.');
     final integer = parts[0];
-    final fraction = parts.length > 1 ? parts[1] : '00';
+    final fraction = parts.length > 1 ? '.${parts[1]}' : '';
     final reg = RegExp(r'\B(?=(\d{3})+(?!\d))');
     final withCommas = integer.replaceAllMapped(reg, (m) => ',${m.group(0)}');
 
-    switch (option.code) {
-      case 'INR':
-      case 'LKR':
-        return '${option.symbol} $withCommas.$fraction';
-      case 'EUR':
-        return '${option.symbol}$withCommas.$fraction';
-      default:
-        return '${option.symbol}$withCommas.$fraction';
-    }
+    final prefix = option.code == 'INR' || option.code == 'LKR'
+        ? '${option.symbol} '
+        : option.symbol;
+    return '$prefix$withCommas$fraction';
   }
 }

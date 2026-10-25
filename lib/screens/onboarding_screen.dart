@@ -142,8 +142,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (name.isEmpty) {
       return;
     }
-    if (_customAccounts.any((a) => a.name.toLowerCase() == name.toLowerCase()) ||
-        _selectedSuggestedAccounts.any((a) => a.toLowerCase() == name.toLowerCase()) ||
+    if (_customAccounts.any(
+          (a) => a.name.toLowerCase() == name.toLowerCase(),
+        ) ||
+        _selectedSuggestedAccounts.any(
+          (a) => a.toLowerCase() == name.toLowerCase(),
+        ) ||
         name.toLowerCase() == _kCashAccount) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Account name already exists')),
@@ -154,8 +158,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _customAccounts.add(
         _PendingAccount(
           name: name,
-          colorValue: _accountColors[
-              _customAccounts.length % _accountColors.length].toARGB32(),
+          colorValue:
+              _accountColors[_customAccounts.length % _accountColors.length]
+                  .toARGB32(),
         ),
       );
       _accountNameController.clear();
@@ -248,9 +253,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Account(
             name: name,
             balance: 0,
-            colorValue: _accountColors[
-                    colorIndex++ % _accountColors.length]
-                .toARGB32(),
+            colorValue:
+                _accountColors[colorIndex++ % _accountColors.length].toARGB32(),
           ),
         );
       }
@@ -403,30 +407,24 @@ class _PendingAccount {
 }
 
 class _CurrencyStep extends StatelessWidget {
-  const _CurrencyStep({
-    required this.currencyCode,
-    required this.onChanged,
-  });
+  const _CurrencyStep({required this.currencyCode, required this.onChanged});
 
   final String currencyCode;
   final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final option = kCurrencyOptions.firstWhere(
-      (item) => item.code == currencyCode,
-      orElse: () => kCurrencyOptions.first,
-    );
-    final preview = _formatPreview(option, 1234.56);
+    final option = CurrencyService.optionForCode(currencyCode);
+    final preview = CurrencyService.formatWithOption(option, 1234.56);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       children: [
         Text(
           'Choose your currency',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
         Text(
@@ -437,12 +435,13 @@ class _CurrencyStep extends StatelessWidget {
         DropdownButtonFormField<String>(
           key: ValueKey(currencyCode),
           initialValue: currencyCode,
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Country / currency'),
           items: kCurrencyOptions
               .map(
                 (option) => DropdownMenuItem(
                   value: option.code,
-                  child: Text(option.label),
+                  child: Text(option.label, overflow: TextOverflow.ellipsis),
                 ),
               )
               .toList(),
@@ -455,7 +454,10 @@ class _CurrencyStep extends StatelessWidget {
         const SizedBox(height: 16),
         Card(
           child: ListTile(
-            leading: const Icon(Icons.payments_outlined, color: AppColors.primary),
+            leading: const Icon(
+              Icons.payments_outlined,
+              color: AppColors.primary,
+            ),
             title: const Text('Preview'),
             subtitle: Text(
               preview,
@@ -469,19 +471,6 @@ class _CurrencyStep extends StatelessWidget {
       ],
     );
   }
-}
-
-String _formatPreview(CurrencyOption option, double value) {
-  final s = value.toStringAsFixed(2);
-  final parts = s.split('.');
-  final integer = parts[0];
-  final fraction = parts.length > 1 ? parts[1] : '00';
-  final reg = RegExp(r'\B(?=(\d{3})+(?!\d))');
-  final withCommas = integer.replaceAllMapped(reg, (m) => ',${m.group(0)}');
-  if (option.code == 'INR' || option.code == 'LKR') {
-    return '${option.symbol} $withCommas.$fraction';
-  }
-  return '${option.symbol}$withCommas.$fraction';
 }
 
 class _CategoryStep extends StatelessWidget {
@@ -508,9 +497,9 @@ class _CategoryStep extends StatelessWidget {
       children: [
         Text(
           'Select categories',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
         Text(
@@ -563,9 +552,9 @@ class _AccountsStep extends StatelessWidget {
       children: [
         Text(
           'Set up accounts',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
         Text(
@@ -577,7 +566,10 @@ class _AccountsStep extends StatelessWidget {
           child: ListTile(
             leading: CircleAvatar(
               backgroundColor: AppColors.cashTint.withValues(alpha: 0.14),
-              child: const Icon(Icons.payments_outlined, color: AppColors.cashTint),
+              child: const Icon(
+                Icons.payments_outlined,
+                color: AppColors.cashTint,
+              ),
             ),
             title: const Text('Cash'),
             subtitle: const Text('Always included'),
@@ -585,44 +577,46 @@ class _AccountsStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        Text('Suggested accounts', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Suggested accounts',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: 10),
-        ..._suggestedAccounts.map(
-          (name) {
-            final isSelected = selectedSuggested.contains(name);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Material(
-                color: palette.card,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-                  side: BorderSide(
-                    color: isSelected ? AppColors.primary : palette.border,
-                    width: isSelected ? 2 : 1,
-                  ),
-                ),
-                child: CheckboxListTile(
-                  value: isSelected,
-                  onChanged: (_) => onToggleSuggested(name),
-                  title: Text(name),
-                  secondary: const Icon(Icons.account_balance_wallet_outlined),
-                  controlAffinity: ListTileControlAffinity.leading,
+        ..._suggestedAccounts.map((name) {
+          final isSelected = selectedSuggested.contains(name);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Material(
+              color: palette.card,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                side: BorderSide(
+                  color: isSelected ? AppColors.primary : palette.border,
+                  width: isSelected ? 2 : 1,
                 ),
               ),
-            );
-          },
-        ),
+              child: CheckboxListTile(
+                value: isSelected,
+                onChanged: (_) => onToggleSuggested(name),
+                title: Text(name),
+                secondary: const Icon(Icons.account_balance_wallet_outlined),
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+            ),
+          );
+        }),
         const SizedBox(height: 16),
-        Text('Add custom account', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Add custom account',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
               child: TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
-                  hintText: 'Account name',
-                ),
+                decoration: const InputDecoration(hintText: 'Account name'),
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => onAddCustom(),
               ),
@@ -641,8 +635,9 @@ class _AccountsStep extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor:
-                      Color(account.colorValue).withValues(alpha: 0.14),
+                  backgroundColor: Color(
+                    account.colorValue,
+                  ).withValues(alpha: 0.14),
                   child: Icon(
                     Icons.account_balance_wallet_outlined,
                     color: Color(account.colorValue),
@@ -695,9 +690,9 @@ class _PinStep extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             confirmStep ? 'Confirm your PIN' : 'Create your PIN',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           Text(

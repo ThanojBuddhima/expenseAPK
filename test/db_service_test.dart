@@ -95,6 +95,52 @@ void main() {
     expect(updated.any((c) => c.name == 'Travel'), isTrue);
   });
 
+  test('seeds and manages income categories separately', () async {
+    final initial = await db.getAllIncomeCategories();
+    expect(
+      initial.map((category) => category.name),
+      containsAll(['Salary', 'Bonus', 'Allowance', 'Other']),
+    );
+
+    final id = await db.insertIncomeCategory(
+      ExpenseCategory(name: 'Interest', colorValue: 0xFF3B82F6),
+    );
+    expect(id, greaterThan(0));
+
+    var incomeCategories = await db.getAllIncomeCategories();
+    expect(
+      incomeCategories.any((category) => category.name == 'Interest'),
+      isTrue,
+    );
+    expect(
+      (await db.getAllCategories()).any(
+        (category) => category.name == 'Interest',
+      ),
+      isFalse,
+    );
+
+    final interest = incomeCategories.firstWhere(
+      (category) => category.name == 'Interest',
+    );
+    await db.updateIncomeCategory(
+      ExpenseCategory(
+        id: interest.id,
+        name: 'Bank interest',
+        colorValue: interest.colorValue,
+      ),
+    );
+    incomeCategories = await db.getAllIncomeCategories();
+    expect(
+      incomeCategories.any((category) => category.name == 'Bank interest'),
+      isTrue,
+    );
+    expect(await db.deleteIncomeCategory(interest.id!), 1);
+    for (final category in await db.getAllIncomeCategories()) {
+      await db.deleteIncomeCategory(category.id!);
+    }
+    expect(await db.getAllIncomeCategories(), isEmpty);
+  });
+
   test('searches expenses by query', () async {
     await db.insertExpense(
       Expense(
@@ -115,12 +161,7 @@ void main() {
 
   test('stores monthly budgets', () async {
     final id = await db.insertBudget(
-      Budget(
-        categoryName: '',
-        amount: 500,
-        year: 2026,
-        month: 5,
-      ),
+      Budget(categoryName: '', amount: 500, year: 2026, month: 5),
     );
     expect(id, greaterThan(0));
 
@@ -130,11 +171,7 @@ void main() {
 
   test('deletes custom accounts', () async {
     final id = await db.insertAccount(
-      Account(
-        name: 'Wallet',
-        balance: 40.0,
-        colorValue: 0xFFF59E0B,
-      ),
+      Account(name: 'Wallet', balance: 40.0, colorValue: 0xFFF59E0B),
     );
 
     final deleted = await db.deleteAccount(id);
